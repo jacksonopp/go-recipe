@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"github.com/gofiber/fiber/v2"
 	"github.com/jacksonopp/go-recipe/domain"
 	"github.com/jacksonopp/go-recipe/services"
@@ -21,11 +22,10 @@ func NewUserHandler(r fiber.Router, db *gorm.DB) *UserHandler {
 }
 
 func (h *UserHandler) CreateAllRoutes() {
-	h.r.Post("/login", h.login)
-	// h.r.Post("/register", h.register)
+	h.r.Post("/register", h.register)
 }
 
-func (h *UserHandler) login(c *fiber.Ctx) error {
+func (h *UserHandler) register(c *fiber.Ctx) error {
 	user := struct {
 		Username        string `json:"username"`
 		Password        string `json:"password"`
@@ -58,9 +58,18 @@ func (h *UserHandler) login(c *fiber.Ctx) error {
 	}
 
 	if err := h.s.CreateUser(u); err != nil {
-		log.Printf("error creating user: %v", err)
-		return SendError(c, InternalServerError())
-	}
+		var e services.UserServiceError
+		if errors.As(err, &e) {
+			if e.Code == services.ErrUserAlreadyExists {
+				err := Conflict(map[string]string{"username": e.Msg})
+				return SendError(c, err)
+			}
+		}
 
-	return c.SendString("login")
+		log.Printf("error creating user: %v", err)
+		return InternalServerError()
+	}
+	c.Status(201)
+
+	return nil
 }

@@ -11,7 +11,7 @@ import (
 
 func main() {
 	dsn := "host=localhost user=postgres password=postgres dbname=recipe port=5433 sslmode=disable"
-	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
+	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{TranslateError: true})
 	if err != nil {
 		log.Panicf("failed to connect to database: %v", err)
 		return
@@ -33,7 +33,10 @@ func main() {
 		return c.SendString("ok")
 	})
 
-	app.Listen(":8080")
+	err = app.Listen(":8080")
+	if err != nil {
+		log.Panicf("failed to start server: %v", err)
+	}
 }
 
 func createApiRoutes(handlers ...handlers.Handler) {
