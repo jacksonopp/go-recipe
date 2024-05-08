@@ -1,20 +1,43 @@
 package main
 
 import (
+	"github.com/gofiber/fiber/v2"
+	"github.com/jacksonopp/go-recipe/domain"
+	"github.com/jacksonopp/go-recipe/handlers"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
 	"log"
-	"net/http"
 )
 
 func main() {
-	m := http.NewServeMux()
+	dsn := "host=localhost user=postgres password=postgres dbname=recipe port=5433 sslmode=disable"
+	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
+	if err != nil {
+		log.Panicf("failed to connect to database: %v", err)
+		return
+	}
 
-	m.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
-		_, err := w.Write([]byte("ok"))
-		if err != nil {
-			return
-		}
+	err = db.AutoMigrate(&domain.User{})
+	if err != nil {
+		log.Panicf("failed to migrate database: %v", err)
+		return
+	}
+
+	app := fiber.New()
+	api := app.Group("/api")
+
+	userHandler := handlers.NewUserHandler(api, db)
+	createApiRoutes(userHandler)
+
+	app.Get("/", func(c *fiber.Ctx) error {
+		return c.SendString("ok")
 	})
 
-	log.Println("Server is running on :8080")
-	http.ListenAndServe(":8080", m)
+	app.Listen(":8080")
+}
+
+func createApiRoutes(handlers ...handlers.Handler) {
+	for _, handler := range handlers {
+		handler.CreateAllRoutes()
+	}
 }
