@@ -10,12 +10,22 @@ import (
 type UserServiceErrorCode int
 
 const (
-	ErrUserAlreadyExists UserServiceErrorCode = iota
+	ErrUnknown UserServiceErrorCode = iota
+	ErrUserAlreadyExists
+	ErrUserNotFound
+	ErrPasswordMismatch
 )
 
 type UserServiceError struct {
 	Code UserServiceErrorCode
 	Msg  string
+}
+
+func NewUserServiceError(code UserServiceErrorCode, msg string) UserServiceError {
+	return UserServiceError{
+		Code: code,
+		Msg:  msg,
+	}
 }
 
 func (e UserServiceError) Error() string {
@@ -42,12 +52,9 @@ func (s *UserService) CreateUser(user domain.User) error {
 
 	if result.Error != nil {
 		if errors.Is(result.Error, gorm.ErrDuplicatedKey) {
-			return UserServiceError{
-				Code: ErrUserAlreadyExists,
-				Msg:  "user already exists",
-			}
+			return NewUserServiceError(ErrUserAlreadyExists, "user already exists")
 		}
-		return result.Error
+		return NewUserServiceError(ErrUnknown, "unknown error")
 	}
 
 	return result.Error
@@ -57,7 +64,24 @@ func (s *UserService) GetUserByName(name string) (*domain.User, error) {
 	var user domain.User
 	tx := s.db.Where("name = ?", name).First(&user)
 	if tx.Error != nil {
-		return nil, tx.Error
+		if errors.Is(tx.Error, gorm.ErrRecordNotFound) {
+			return nil, NewUserServiceError(ErrUserNotFound, "user not found")
+		}
+		return nil, NewUserServiceError(ErrUnknown, "unknown error")
 	}
 	return &user, nil
+}
+
+func (s *UserService) LoginUser(name, password string) (*domain.User, error) {
+	user, err := s.GetUserByName(name)
+	if err != nil {
+		return nil, err
+	}
+
+	ok := checkPasswordHash(password, user.Password)
+	if !ok {
+		return nil, NewUserServiceError(ErrPasswordMismatch, "passwords do not match")
+	}
+
+	return user, nil
 }

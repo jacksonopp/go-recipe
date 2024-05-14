@@ -33,7 +33,7 @@ func main() {
 		return c.SendString("ok")
 	})
 
-	err = app.Listen(":8080")
+	err = app.Listen(":8000")
 	if err != nil {
 		log.Panicf("failed to start server: %v", err)
 	}

@@ -10,7 +10,6 @@ import (
 )
 
 type UserHandler struct {
-	// userService services.UserService
 	r fiber.Router
 	s *services.UserService
 }
@@ -23,6 +22,7 @@ func NewUserHandler(r fiber.Router, db *gorm.DB) *UserHandler {
 
 func (h *UserHandler) CreateAllRoutes() {
 	h.r.Post("/register", h.register)
+	h.r.Post("/login", h.login)
 }
 
 func (h *UserHandler) register(c *fiber.Ctx) error {
@@ -34,7 +34,8 @@ func (h *UserHandler) register(c *fiber.Ctx) error {
 
 	if err := c.BodyParser(&user); err != nil {
 		log.Printf("error parsing body: %v", err)
-		return c.Status(400).SendString("bad request")
+		err := UnprocessableEntity(map[string]string{"error": "invalid request body"})
+		return SendError(c, err)
 	}
 
 	if user.Username == "" {
@@ -70,6 +71,32 @@ func (h *UserHandler) register(c *fiber.Ctx) error {
 		return InternalServerError()
 	}
 	c.Status(201)
+
+	return nil
+}
+
+func (h *UserHandler) login(c *fiber.Ctx) error {
+	user := struct {
+		Username string `json:"username"`
+		Password string `json:"password"`
+	}{}
+
+	if err := c.BodyParser(&user); err != nil {
+		err := UnprocessableEntity(map[string]string{"error": "invalid request body"})
+		return SendError(c, err)
+	}
+
+	if user.Username == "" {
+		err := UnprocessableEntity(map[string]string{"username": "username is required"})
+		return SendError(c, err)
+	}
+
+	if user.Password == "" {
+		err := UnprocessableEntity(map[string]string{"password": "password is required"})
+		return SendError(c, err)
+	}
+
+	c.SendString("working on it")
 
 	return nil
 }
