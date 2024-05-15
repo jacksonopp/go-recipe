@@ -117,5 +117,5 @@ func (h *UserHandler) login(c *fiber.Ctx) error {
 		Value: token,
 	})
 
-	return c.JSON(u)
+	return c.JSON(u.ToDto())
 }
