@@ -10,14 +10,16 @@ import (
 )
 
 type UserHandler struct {
-	r fiber.Router
-	s services.UserService
+	r              fiber.Router
+	userService    services.UserService
+	sessionService services.SessionService
 }
 
 func NewUserHandler(r fiber.Router, db *gorm.DB) *UserHandler {
-	s := services.NewUserService(db)
+	userService := services.NewUserService(db)
+	sessionService := services.NewSessionService(db)
 
-	return &UserHandler{r: r, s: s}
+	return &UserHandler{r: r, userService: userService, sessionService: sessionService}
 }
 
 func (h *UserHandler) CreateAllRoutes() {
@@ -59,7 +61,7 @@ func (h *UserHandler) register(c *fiber.Ctx) error {
 		Password: user.Password,
 	}
 
-	if err := h.s.CreateUser(u); err != nil {
+	if err := h.userService.CreateUser(u); err != nil {
 		var e services.UserServiceError
 		if errors.As(err, &e) {
 			if e.Code == services.ErrUserAlreadyExists {
@@ -97,12 +99,23 @@ func (h *UserHandler) login(c *fiber.Ctx) error {
 		return SendError(c, err)
 	}
 
-	u, err := h.s.LoginUser(user.Username, user.Password)
+	u, err := h.userService.LoginUser(user.Username, user.Password)
 	if err != nil {
 		log.Println("error logging in user: ", err)
 		err := NotFound(map[string]string{"error": "user not found"})
 		return SendError(c, err)
 	}
+
+	token, err := h.sessionService.CreateSession(u.ID)
+	if err != nil {
+		log.Println("error creating session: ", err)
+		return SendError(c, InternalServerError())
+	}
+
+	c.Cookie(&fiber.Cookie{
+		Name:  "session",
+		Value: token,
+	})
 
 	return c.JSON(u)
 }

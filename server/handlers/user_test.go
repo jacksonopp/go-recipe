@@ -9,21 +9,21 @@ import (
 
 type mockUserService struct{}
 
-func (s *mockUserService) CreateUser(user domain.User) error {
+func (s *mockUserService) CreateUser(_user domain.User) error {
 	return nil
 }
 
-func (s *mockUserService) GetUserByName(name string) (*domain.User, error) {
+func (s *mockUserService) GetUserByName(_name string) (*domain.User, error) {
 	return nil, nil
 }
 
-func (s *mockUserService) LoginUser(name, password string) (*domain.User, error) {
+func (s *mockUserService) LoginUser(_name, _password string) (*domain.User, error) {
 	return nil, nil
 }
 
 func TestUserHandler_register(t *testing.T) {
 	app := fiber.New()
-	h := UserHandler{s: &mockUserService{}, r: app}
+	h := UserHandler{userService: &mockUserService{}, r: app}
 	c := app.AcquireCtx(&fasthttp.RequestCtx{})
 
 	tests := []struct {
@@ -82,7 +82,7 @@ func TestUserHandler_register(t *testing.T) {
 
 func TestUserHandler_login(t *testing.T) {
 	app := fiber.New()
-	h := UserHandler{s: &mockUserService{}, r: app}
+	h := UserHandler{userService: &mockUserService{}, r: app}
 	c := app.AcquireCtx(&fasthttp.RequestCtx{})
 
 	tests := []struct {

@@ -17,7 +17,7 @@ func checkPasswordHash(password, salt, hash string) bool {
 	return err == nil
 }
 
-func generateSalt(length int) (string, error) {
+func genRandStr(length int) (string, error) {
 	result := make([]byte, length)
 	_, err := rand.Read(result)
 	if err != nil {

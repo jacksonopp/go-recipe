@@ -48,7 +48,7 @@ func NewUserService(db *gorm.DB) UserService {
 }
 
 func (s *userService) CreateUser(user domain.User) error {
-	salt, err := generateSalt(32)
+	salt, err := genRandStr(32)
 	if err != nil {
 		return err
 	}
