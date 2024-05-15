@@ -3,6 +3,15 @@ module github.com/jacksonopp/go-recipe
 go 1.22.2
 
 require (
+	github.com/coreos/go-oidc/v3 v3.8.0
+	github.com/gin-contrib/sessions v0.0.5
+	github.com/gin-gonic/gin v1.9.1
+	github.com/joho/godotenv v1.5.1
+	golang.org/x/oauth2 v0.15.0
+)
+
+require (
+	github.com/DATA-DOG/go-sqlmock v1.5.2 // indirect
 	github.com/andybalholm/brotli v1.0.5 // indirect
 	github.com/gofiber/fiber/v2 v2.52.4 // indirect
 	github.com/google/uuid v1.5.0 // indirect
@@ -26,9 +35,4 @@ require (
 	golang.org/x/text v0.15.0 // indirect
 	gorm.io/driver/postgres v1.5.7 // indirect
 	gorm.io/gorm v1.25.10 // indirect
-	github.com/coreos/go-oidc/v3 v3.8.0
-	github.com/gin-contrib/sessions v0.0.5
-	github.com/gin-gonic/gin v1.9.1
-	github.com/joho/godotenv v1.5.1
-	golang.org/x/oauth2 v0.15.0
 )

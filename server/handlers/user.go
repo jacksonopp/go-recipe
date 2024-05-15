@@ -11,7 +11,7 @@ import (
 
 type UserHandler struct {
 	r fiber.Router
-	s *services.UserService
+	s services.UserService
 }
 
 func NewUserHandler(r fiber.Router, db *gorm.DB) *UserHandler {
@@ -33,6 +33,7 @@ func (h *UserHandler) register(c *fiber.Ctx) error {
 	}{}
 
 	if err := c.BodyParser(&user); err != nil {
+		log.Printf("body content: %v", string(c.Body()))
 		log.Printf("error parsing body: %v", err)
 		err := UnprocessableEntity(map[string]string{"error": "invalid request body"})
 		return SendError(c, err)
@@ -96,7 +97,12 @@ func (h *UserHandler) login(c *fiber.Ctx) error {
 		return SendError(c, err)
 	}
 
-	c.SendString("working on it")
+	u, err := h.s.LoginUser(user.Username, user.Password)
+	if err != nil {
+		log.Println("error logging in user: ", err)
+		err := NotFound(map[string]string{"error": "user not found"})
+		return SendError(c, err)
+	}
 
-	return nil
+	return c.JSON(u)
 }

@@ -24,7 +24,7 @@ func main() {
 		return
 	}
 
-	err = db.AutoMigrate(&domain.User{})
+	err = db.AutoMigrate(&domain.User{}, &domain.Session{})
 	if err != nil {
 		log.Panicf("failed to migrate database: %v", err)
 		return

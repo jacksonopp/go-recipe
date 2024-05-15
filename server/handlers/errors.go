@@ -18,6 +18,10 @@ func (e APIError) Error() string {
 	return fmt.Sprintf("api error: %v", e.Msg)
 }
 
+func NotFound(items map[string]string) APIError {
+	return NewAPIError(404, items)
+}
+
 func UnprocessableEntity(items map[string]string) APIError {
 	return NewAPIError(422, items)
 }

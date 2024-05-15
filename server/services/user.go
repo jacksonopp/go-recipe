@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/jacksonopp/go-recipe/domain"
 	"gorm.io/gorm"
+	"log"
 )
 
 type UserServiceErrorCode int
@@ -32,16 +33,28 @@ func (e UserServiceError) Error() string {
 	return fmt.Sprintf("user service error: %v", e.Msg)
 }
 
-type UserService struct {
+type userService struct {
 	db *gorm.DB
 }
 
-func NewUserService(db *gorm.DB) *UserService {
-	return &UserService{db: db}
+type UserService interface {
+	CreateUser(user domain.User) error
+	GetUserByName(name string) (*domain.User, error)
+	LoginUser(name, password string) (*domain.User, error)
 }
 
-func (s *UserService) CreateUser(user domain.User) error {
-	pass, err := hashPassword(user.Password)
+func NewUserService(db *gorm.DB) UserService {
+	return &userService{db: db}
+}
+
+func (s *userService) CreateUser(user domain.User) error {
+	salt, err := generateSalt(32)
+	if err != nil {
+		return err
+	}
+	user.Salt = salt
+
+	pass, err := hashPassword(user.Password, user.Salt)
 	if err != nil {
 		return err
 	}
@@ -60,28 +73,34 @@ func (s *UserService) CreateUser(user domain.User) error {
 	return result.Error
 }
 
-func (s *UserService) GetUserByName(name string) (*domain.User, error) {
+func (s *userService) GetUserByName(name string) (*domain.User, error) {
 	var user domain.User
-	tx := s.db.Where("name = ?", name).First(&user)
+	tx := s.db.Where("username = ?", name).First(&user)
 	if tx.Error != nil {
 		if errors.Is(tx.Error, gorm.ErrRecordNotFound) {
 			return nil, NewUserServiceError(ErrUserNotFound, "user not found")
 		}
+		log.Println("error getting user by name", tx.Error)
 		return nil, NewUserServiceError(ErrUnknown, "unknown error")
 	}
 	return &user, nil
 }
 
-func (s *UserService) LoginUser(name, password string) (*domain.User, error) {
+func (s *userService) LoginUser(name, password string) (*domain.User, error) {
 	user, err := s.GetUserByName(name)
 	if err != nil {
+		log.Println("error getting user by name", err)
 		return nil, err
 	}
 
-	ok := checkPasswordHash(password, user.Password)
+	ok := checkPasswordHash(password, user.Salt, user.Password)
 	if !ok {
+		log.Println("password mismatch")
 		return nil, NewUserServiceError(ErrPasswordMismatch, "passwords do not match")
 	}
+
+	user.Salt = ""
+	user.Password = ""
 
 	return user, nil
 }
