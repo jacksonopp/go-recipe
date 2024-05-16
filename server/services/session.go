@@ -90,3 +90,11 @@ func (s *SessionService) DeleteSessionByToken(token string) error {
 	}
 	return nil
 }
+
+func (s *SessionService) PruneSessions() error {
+	res := s.db.Delete(&domain.Session{}, "expires_at < ?", time.Now())
+	if res.Error != nil {
+		return res.Error
+	}
+	return nil
+}

@@ -35,7 +35,8 @@ func main() {
 	api := app.Group("/api")
 
 	userHandler := handlers.NewUserHandler(api, db)
-	createApiRoutes(userHandler)
+	recipeHandler := handlers.NewRecipeHandler(api, db)
+	createApiRoutes(userHandler, recipeHandler)
 
 	app.Get("/", func(c *fiber.Ctx) error {
 		log.Println("request to /")

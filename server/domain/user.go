@@ -7,7 +7,7 @@ type User struct {
 	Username string    `gorm:"unique;not null" json:"username"`
 	Password string    `gorm:"not null" json:"password"`
 	Salt     string    `gorm:"not null" json:"salt"`
-	Sessions []Session `json:"sessions"`
+	Sessions []Session `gorm:"foreignKey:UserID" json:"sessions"`
 }
 
 type UserDto struct {

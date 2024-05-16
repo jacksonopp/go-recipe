@@ -17,23 +17,18 @@ func checkPasswordHash(password, salt, hash string) bool {
 	return err == nil
 }
 
+const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_"
+
 func genRandStr(length int) (string, error) {
-	result := make([]byte, length)
-	_, err := rand.Read(result)
+	bytes := make([]byte, length)
+	_, err := rand.Read(bytes)
 	if err != nil {
 		return "", err
 	}
 
-	for i := 0; i < length; i++ {
-		result[i] &= 0x7F                       // Ensure the byte is within printable ASCII range
-		for result[i] < 33 || result[i] > 126 { // Exclude control characters and space
-			_, err = rand.Read(result[i : i+1])
-			if err != nil {
-				return "", err
-			}
-			result[i] &= 0x7F
-		}
+	for i, b := range bytes {
+		bytes[i] = charset[b%byte(len(charset))]
 	}
 
-	return string(result), nil
+	return string(bytes), nil
 }

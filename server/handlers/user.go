@@ -19,7 +19,9 @@ func NewUserHandler(r fiber.Router, db *gorm.DB) *UserHandler {
 	userService := services.NewUserService(db)
 	sessionService := services.NewSessionService(db)
 
-	return &UserHandler{r: r, userService: userService, sessionService: sessionService}
+	subpath := r.Group("/user")
+
+	return &UserHandler{r: subpath, userService: userService, sessionService: sessionService}
 }
 
 func (h *UserHandler) CreateAllRoutes() {
