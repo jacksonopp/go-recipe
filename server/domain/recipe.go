@@ -18,22 +18,33 @@ type Recipe struct {
 
 // RecipeDto is a DTO for a Recipe.
 type RecipeDto struct {
-	ID           uint          `json:"id"`
-	CreatedAt    time.Time     `json:"created_at"`
-	Name         string        `json:"name"`
-	Description  string        `json:"description"`
-	Ingredients  []Ingredient  `json:"ingredients"`
-	Instructions []Instruction `json:"instructions"`
+	ID           uint      `json:"id"`
+	CreatedAt    time.Time `json:"created_at"`
+	Name         string    `json:"name"`
+	Description  string    `json:"description"`
+	Ingredients  []Dto     `json:"ingredients"`
+	Instructions []Dto     `json:"instructions"`
 }
 
 // ToDto converts a Recipe to a RecipeDto.
 func (r *Recipe) ToDto() Dto {
+	ingredients := make([]Dto, len(r.Ingredients))
+	for i, ingredient := range r.Ingredients {
+		ingredients[i] = ingredient.ToDto()
+	}
+
+	instructions := make([]Dto, len(r.Instructions))
+	for i, instruction := range r.Instructions {
+		instructions[i] = instruction.ToDto()
+	}
+
 	return RecipeDto{
-		ID:          r.ID,
-		CreatedAt:   r.CreatedAt,
-		Name:        r.Name,
-		Description: r.Description,
-		Ingredients: r.Ingredients,
+		ID:           r.ID,
+		CreatedAt:    r.CreatedAt,
+		Name:         r.Name,
+		Description:  r.Description,
+		Ingredients:  ingredients,
+		Instructions: instructions,
 	}
 }
 
@@ -48,9 +59,15 @@ type Ingredient struct {
 	RecipeID uint `json:"recipe_id"`
 }
 
+type IngredientDto struct {
+	Name     string `json:"name"`
+	Quantity string `json:"quantity"`
+	Unit     string `json:"unit"`
+}
+
 // ToDto converts an Ingredient to a Dto.
 func (i *Ingredient) ToDto() Dto {
-	return Ingredient{
+	return IngredientDto{
 		Name:     i.Name,
 		Quantity: i.Quantity,
 		Unit:     i.Unit,
@@ -67,9 +84,14 @@ type Instruction struct {
 	RecipeID uint `json:"recipe_id"`
 }
 
+type InstructionDto struct {
+	Step     int    `json:"step"`
+	Contents string `json:"contents"`
+}
+
 // ToDto converts an Instruction to a Dto.
 func (i *Instruction) ToDto() Dto {
-	return Instruction{
+	return InstructionDto{
 		Step:     i.Step,
 		Contents: i.Contents,
 	}
