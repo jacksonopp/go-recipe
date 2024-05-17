@@ -40,6 +40,10 @@ func AuthMiddleware(db *gorm.DB) fiber.Handler {
 
 func getUserBySessionToken(db *gorm.DB, token string) (*domain.User, error) {
 	var user domain.User
-	err := db.Where("token =?", token).Joins("left join sessions on users.id = sessions.user_id").Find(&user).Error
+	err := db.Table("users").
+		Joins("inner join sessions on users.id = sessions.user_id").
+		Where("sessions.token = ?", token).
+		First(&user).
+		Error
 	return &user, err
 }

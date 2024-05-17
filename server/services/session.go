@@ -4,6 +4,7 @@ import (
 	"errors"
 	"github.com/jacksonopp/go-recipe/domain"
 	"gorm.io/gorm"
+	"log"
 	"time"
 )
 
@@ -97,4 +98,28 @@ func (s *SessionService) PruneSessions() error {
 		return res.Error
 	}
 	return nil
+}
+
+func (s *SessionService) PruneOnSchedule(t time.Duration) (chan<- bool, error) {
+	done := make(chan bool)
+	ticker := time.NewTicker(t)
+
+	go func() {
+		for {
+			select {
+			case <-done:
+				log.Printf("stopping prune job\n")
+				ticker.Stop()
+				return
+			case <-ticker.C:
+				log.Println("Pruning sessions")
+				if err := s.PruneSessions(); err != nil {
+					log.Printf("error pruning session: %v\n", err)
+					done <- true
+				}
+			}
+		}
+	}()
+
+	return done, nil
 }

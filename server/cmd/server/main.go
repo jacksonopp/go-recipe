@@ -6,10 +6,12 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/logger"
 	"github.com/jacksonopp/go-recipe/domain"
 	"github.com/jacksonopp/go-recipe/handlers"
+	"github.com/jacksonopp/go-recipe/services"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"log"
 	"os"
+	"time"
 )
 
 func main() {
@@ -37,6 +39,13 @@ func main() {
 	userHandler := handlers.NewUserHandler(api, db)
 	recipeHandler := handlers.NewRecipeHandler(api, db)
 	createApiRoutes(userHandler, recipeHandler)
+
+	sessionService := services.NewSessionService(db)
+	// TODO figure out what to do with done channel
+	_, err = sessionService.PruneOnSchedule(time.Hour * 24)
+	if err != nil {
+		log.Printf("ERROR: failed to prune session %v", err)
+	}
 
 	app.Get("/", func(c *fiber.Ctx) error {
 		log.Println("request to /")
