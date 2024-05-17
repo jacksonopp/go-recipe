@@ -15,21 +15,9 @@ import (
 )
 
 func main() {
-	dsn := createDsn()
-	log.Println("connecting to database", dsn)
-
-	//dsn := "host=localhost user=postgres password=postgres dbname=go_recipe port=5432 sslmode=disable"
-
-	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{TranslateError: true})
+	db, err := createDb()
 	if err != nil {
-		log.Panicf("failed to connect to database: %v", err)
-		return
-	}
-
-	err = db.AutoMigrate(&domain.User{}, &domain.Session{})
-	if err != nil {
-		log.Panicf("failed to migrate database: %v", err)
-		return
+		log.Panicf("failed to create database %v", err)
 	}
 
 	app := fiber.New()
@@ -42,8 +30,9 @@ func main() {
 
 	sessionService := services.NewSessionService(db)
 	// TODO figure out what to do with done channel
-	_, err = sessionService.PruneOnSchedule(time.Hour * 24)
+	done, err := sessionService.PruneOnSchedule(time.Hour * 24)
 	if err != nil {
+		done <- true
 		log.Printf("ERROR: failed to prune session %v", err)
 	}
 
@@ -67,6 +56,31 @@ func createDsn() string {
 	port := os.Getenv("DB_PORT")
 	sslmode := os.Getenv("DB_SSLMODE")
 	return fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%s sslmode=%s", host, user, password, dbname, port, sslmode)
+}
+
+func createDb() (*gorm.DB, error) {
+	dsn := createDsn()
+	log.Println("connecting to database", dsn)
+
+	//dsn := "host=localhost user=postgres password=postgres dbname=go_recipe port=5432 sslmode=disable"
+
+	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{TranslateError: true})
+	if err != nil {
+		return nil, err
+	}
+
+	err = db.AutoMigrate(
+		&domain.User{},
+		&domain.Session{},
+		&domain.Recipe{},
+		&domain.Ingredient{},
+		&domain.Instruction{},
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	return db, nil
 }
 
 func createApiRoutes(handlers ...handlers.Handler) {

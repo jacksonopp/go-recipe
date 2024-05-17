@@ -18,6 +18,10 @@ func (e APIError) Error() string {
 	return fmt.Sprintf("api error: %v", e.Msg)
 }
 
+func BadRequest(msg string) APIError {
+	return NewAPIError(400, msg)
+}
+
 func NotFound(msg map[string]string) APIError {
 	return NewAPIError(404, msg)
 }

@@ -44,7 +44,8 @@ type Ingredient struct {
 	Name     string `json:"name"`
 	Quantity string `json:"quantity"`
 	Unit     string `json:"unit"`
-	RecipeID uint   `json:"recipe_id"`
+	// RecipeID is the ID of the recipe that this Ingredient belongs to.
+	RecipeID uint `json:"recipe_id"`
 }
 
 // ToDto converts an Ingredient to a Dto.
@@ -62,7 +63,8 @@ type Instruction struct {
 	gorm.Model
 	Step     int    `json:"step"`
 	Contents string `json:"contents"`
-	RecipeID uint   `json:"recipe_id"`
+	// RecipeID is the ID of the recipe that this Instruction belongs to.
+	RecipeID uint `json:"recipe_id"`
 }
 
 // ToDto converts an Instruction to a Dto.
