@@ -7,10 +7,11 @@ import (
 )
 
 type RecipeService interface {
-	CreateRecipe(name, description string, userID uint) error
+	CreateRecipe(userID uint, name, description string) error
 	GetRecipeById(id uint) (*domain.Recipe, error)
 	AddIngredientToRecipe(recipeId uint, name, quantity, unit string) (*domain.Recipe, error)
 	AddInstructionToRecipe(recipeID uint, step int, contents string) (*domain.Recipe, error)
+	UpdateRecipe(recipeID uint, name, description string) (*domain.Recipe, error)
 }
 
 type recipeService struct {
@@ -21,7 +22,7 @@ func NewRecipeService(db *gorm.DB) RecipeService {
 	return &recipeService{db: db}
 }
 
-func (r *recipeService) CreateRecipe(name, description string, userID uint) error {
+func (r *recipeService) CreateRecipe(userID uint, name, description string) error {
 	log.Println("creating recipe", name, description, userID)
 	err := r.db.Create(&domain.Recipe{
 		Name:        name,
@@ -108,6 +109,31 @@ func (r *recipeService) AddInstructionToRecipe(recipeID uint, step int, contents
 		return nil, err
 	}
 	tx.Commit()
+
+	return &recipe, nil
+}
+
+func (r *recipeService) UpdateRecipe(recipeID uint, name, description string) (*domain.Recipe, error) {
+	var recipe domain.Recipe
+
+	err := r.db.First(&recipe, recipeID).Error
+	if err != nil {
+		log.Println("error getting recipe", err)
+		return nil, err
+	}
+
+	if name != "" {
+		recipe.Name = name
+	}
+	if description != "" {
+		recipe.Description = description
+	}
+
+	err = r.db.Save(&recipe).Error
+	if err != nil {
+		log.Println("error saving recipe", err)
+		return nil, err
+	}
 
 	return &recipe, nil
 }
