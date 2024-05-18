@@ -60,6 +60,7 @@ type Ingredient struct {
 }
 
 type IngredientDto struct {
+	ID       uint   `json:"id"`
 	Name     string `json:"name"`
 	Quantity string `json:"quantity"`
 	Unit     string `json:"unit"`
@@ -68,6 +69,7 @@ type IngredientDto struct {
 // ToDto converts an Ingredient to a Dto.
 func (i *Ingredient) ToDto() Dto {
 	return IngredientDto{
+		ID:       i.ID,
 		Name:     i.Name,
 		Quantity: i.Quantity,
 		Unit:     i.Unit,
@@ -85,6 +87,7 @@ type Instruction struct {
 }
 
 type InstructionDto struct {
+	ID       uint   `json:"id"`
 	Step     int    `json:"step"`
 	Contents string `json:"contents"`
 }
@@ -92,6 +95,7 @@ type InstructionDto struct {
 // ToDto converts an Instruction to a Dto.
 func (i *Instruction) ToDto() Dto {
 	return InstructionDto{
+		ID:       i.ID,
 		Step:     i.Step,
 		Contents: i.Contents,
 	}

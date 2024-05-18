@@ -24,7 +24,7 @@ func NewUserHandler(r fiber.Router, db *gorm.DB) *UserHandler {
 	return &UserHandler{r: subpath, userService: userService, sessionService: sessionService}
 }
 
-func (h *UserHandler) CreateAllRoutes() {
+func (h *UserHandler) RegisterRoutes() {
 	h.r.Post("/register", h.register)
 	h.r.Post("/login", h.login)
 }

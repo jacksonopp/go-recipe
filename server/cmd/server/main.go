@@ -85,6 +85,6 @@ func createDb() (*gorm.DB, error) {
 
 func createApiRoutes(handlers ...handlers.Handler) {
 	for _, handler := range handlers {
-		handler.CreateAllRoutes()
+		handler.RegisterRoutes()
 	}
 }
