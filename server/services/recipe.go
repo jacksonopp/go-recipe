@@ -1,11 +1,13 @@
 package services
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"github.com/jacksonopp/go-recipe/domain"
 	"gorm.io/gorm"
 	"log"
+	"time"
 )
 
 type RecipeServiceErrorCode int
@@ -48,331 +50,732 @@ type RecipeService interface {
 }
 
 type recipeService struct {
-	db *gorm.DB
+	db  *gorm.DB
+	ctx context.Context
 }
 
 func NewRecipeService(db *gorm.DB) RecipeService {
-	return &recipeService{db: db}
+	ctx := context.Background()
+	return &recipeService{db: db, ctx: ctx}
+}
+
+type val struct {
+	recipe *domain.Recipe
+	err    error
 }
 
 func (r *recipeService) CreateRecipe(userID uint, name, description string) error {
-	log.Println("creating recipe", name, description, userID)
-	err := r.db.Create(&domain.Recipe{
-		Name:        name,
-		Description: description,
-		UserID:      userID,
-	}).Error
-	if err != nil {
-		log.Println("error creating recipe", err)
-		return err
-	}
-	return nil
-}
+	ctx, cancel := context.WithTimeout(r.ctx, 5*time.Second)
+	defer cancel()
+	errCh := make(chan error)
 
-func (r *recipeService) GetRecipeById(id uint) (*domain.Recipe, error) {
-	return getRecipeByIdWithTx(r.db, id)
-}
-
-func getRecipeByIdWithTx(tx *gorm.DB, id uint) (*domain.Recipe, error) {
-	var recipe domain.Recipe
-	err := tx.Preload("Ingredients").First(&recipe, id).Error
-	if err != nil {
-		log.Println("error getting recipe", err)
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, NewRecipeServiceError(ErrRecipeNotFound, fmt.Sprintf("recipe %d not found", id))
-		}
-		return nil, err
-	}
-
-	var instructions []domain.Instruction
-	err = tx.Order("instructions.step ASC").Find(&instructions, "recipe_id = ?", id).Error
-	if err != nil {
-		log.Println("error getting instructions", err)
-		return nil, NewRecipeServiceError(ErrRecipeNotFound, fmt.Sprintf("recipe %d not found", id))
-	}
-
-	recipe.Instructions = instructions
-
-	return &recipe, nil
-}
-
-func (r *recipeService) AddIngredientToRecipe(recipeID uint, name, quantity, unit string) (*domain.Recipe, error) {
-	tx := r.db.Begin()
-	defer recoverTx(tx)
-
-	err := tx.Create(&domain.Ingredient{
-		Name:     name,
-		Quantity: quantity,
-		Unit:     unit,
-		RecipeID: recipeID,
-	}).Error
-	if err != nil {
-		log.Println("error creating ingredient", err)
-		tx.Rollback()
-		return nil, NewRecipeServiceError(ErrUnknownRecipe, fmt.Sprintf("error creating ingredient: %v", err))
-	}
-	recipe, err := getRecipeByIdWithTx(tx, recipeID)
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, NewRecipeServiceError(ErrRecipeNotFound, fmt.Sprintf("recipe %d not found", recipeID))
-		}
-		log.Println("error getting recipe", err)
-		tx.Rollback()
-		return nil, NewRecipeServiceError(ErrUnknownRecipe, fmt.Sprintf("error getting recipe: %v", err))
-	}
-	if err := tx.Commit().Error; err != nil {
-		log.Println("error committing transaction", err)
-		return nil, NewRecipeServiceError(ErrUnknownRecipe, fmt.Sprintf("error committing transaction: %v", err))
-	}
-
-	return recipe, nil
-}
-
-func (r *recipeService) AddInstructionToRecipe(recipeID uint, step int, contents string) (*domain.Recipe, error) {
-	tx := r.db.Begin()
-	defer func() {
-		if r := recover(); r != nil {
-			tx.Rollback()
+	go func() {
+		defer cancel()
+		log.Println("creating recipe", name, description, userID)
+		err := r.db.Create(&domain.Recipe{
+			Name:        name,
+			Description: description,
+			UserID:      userID,
+		}).Error
+		if err != nil {
+			err := fmt.Sprintf("error creating recipe: %v", err)
+			log.Println(err)
+			errCh <- NewRecipeServiceError(ErrUnknownRecipe, err)
 		}
 	}()
 
-	err := tx.Create(&domain.Instruction{
-		Step:     step,
-		Contents: contents,
-		RecipeID: recipeID,
-	}).Error
-	if err != nil {
-		log.Println("error creating instruction", err)
-		tx.Rollback()
-		return nil, NewRecipeServiceError(ErrUnknownRecipe, fmt.Sprintf("error creating instruction: %v", err))
+	select {
+	case err := <-errCh:
+		return err
+	case <-ctx.Done():
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			return NewRecipeServiceError(ErrUnknownRecipe, "timeout creating recipe")
+		}
+		return nil
 	}
-	recipe, err := getRecipeByIdWithTx(tx, recipeID)
-	if err != nil {
-		log.Println("error getting recipe", err)
-		tx.Rollback()
-		return nil, err
-	}
-	tx.Commit()
+}
 
-	return recipe, nil
+func (r *recipeService) GetRecipeById(id uint) (*domain.Recipe, error) {
+	return getRecipeByIdWithTx(r.ctx, r.db, id)
+}
+
+func getRecipeByIdWithTx(ctx context.Context, tx *gorm.DB, id uint) (*domain.Recipe, error) {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	ch := make(chan val)
+
+	go func() {
+		defer cancel()
+
+		var recipe domain.Recipe
+		err := tx.Preload("Ingredients").First(&recipe, id).Error
+		if err != nil {
+			log.Println("error getting recipe", err)
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				ch <- val{
+					nil,
+					NewRecipeServiceError(
+						ErrRecipeNotFound,
+						fmt.Sprintf("recipe %d not found", id),
+					),
+				}
+				return
+			}
+			ch <- val{
+				nil,
+				NewRecipeServiceError(
+					ErrUnknownRecipe,
+					fmt.Sprintf("error getting recipe: %v", err),
+				),
+			}
+			return
+		}
+
+		var instructions []domain.Instruction
+		err = tx.Order("instructions.step ASC").Find(&instructions, "recipe_id = ?", id).Error
+		if err != nil {
+			log.Println("error getting instructions", err)
+			ch <- val{
+				nil,
+				NewRecipeServiceError(
+					ErrUnknownRecipe,
+					fmt.Sprintf("error getting instructions: %v", err),
+				),
+			}
+			return
+		}
+
+		recipe.Instructions = instructions
+		ch <- val{&recipe, nil}
+	}()
+
+	select {
+	case v := <-ch:
+		return v.recipe, v.err
+	case <-ctx.Done():
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			return nil, NewRecipeServiceError(ErrUnknownRecipe, "timeout getting recipe")
+		}
+		return nil, NewRecipeServiceError(ErrUnknownRecipe, "timeout cancelled without error")
+	}
+}
+
+func (r *recipeService) AddIngredientToRecipe(recipeID uint, name, quantity, unit string) (*domain.Recipe, error) {
+	ctx, cancel := context.WithTimeout(r.ctx, 5*time.Second)
+	defer cancel()
+	ch := make(chan val)
+
+	go func() {
+		defer cancel()
+		tx := r.db.Begin()
+		defer recoverTx(tx)
+
+		err := tx.Create(&domain.Ingredient{
+			Name:     name,
+			Quantity: quantity,
+			Unit:     unit,
+			RecipeID: recipeID,
+		}).Error
+		if err != nil {
+			log.Println("error creating ingredient", err)
+			tx.Rollback()
+			ch <- val{
+				nil,
+				NewRecipeServiceError(
+					ErrUnknownRecipe,
+					fmt.Sprintf("error creating ingredient: %v", err),
+				),
+			}
+			return
+		}
+		recipe, err := getRecipeByIdWithTx(r.ctx, tx, recipeID)
+		if err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				ch <- val{
+					nil,
+					NewRecipeServiceError(
+						ErrRecipeNotFound,
+						fmt.Sprintf("recipe %d not found", recipeID),
+					),
+				}
+				return
+			}
+			log.Println("error getting recipe", err)
+			tx.Rollback()
+			ch <- val{
+				nil,
+				NewRecipeServiceError(
+					ErrUnknownRecipe,
+					fmt.Sprintf("error getting recipe: %v", err),
+				),
+			}
+			return
+		}
+		if err := tx.Commit().Error; err != nil {
+			log.Println("error committing transaction", err)
+			ch <- val{
+				nil,
+				NewRecipeServiceError(
+					ErrUnknownRecipe,
+					fmt.Sprintf("error committing transaction: %v", err),
+				),
+			}
+			return
+		}
+		ch <- val{recipe, nil}
+	}()
+
+	//return recipe, nil
+	select {
+	case v := <-ch:
+		return v.recipe, v.err
+	case <-ctx.Done():
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			return nil, NewRecipeServiceError(ErrUnknownRecipe, "timeout adding ingredient")
+		} else {
+			return nil, NewRecipeServiceError(ErrUnknownRecipe, "timeout cancelled without error")
+		}
+	}
+}
+
+func (r *recipeService) AddInstructionToRecipe(recipeID uint, step int, contents string) (*domain.Recipe, error) {
+	ctx, cancel := context.WithTimeout(r.ctx, 5*time.Second)
+	defer cancel()
+	ch := make(chan val)
+
+	go func() {
+		defer cancel()
+		tx := r.db.Begin()
+		defer recoverTx(tx)
+
+		err := tx.Create(&domain.Instruction{
+			Step:     step,
+			Contents: contents,
+			RecipeID: recipeID,
+		}).Error
+		if err != nil {
+			log.Println("error creating instruction", err)
+			tx.Rollback()
+			//return nil, NewRecipeServiceError(ErrUnknownRecipe, fmt.Sprintf("error creating instruction: %v", err))
+			ch <- val{
+				nil,
+				NewRecipeServiceError(
+					ErrUnknownRecipe,
+					fmt.Sprintf("error creating instruction: %v", err),
+				),
+			}
+			return
+		}
+
+		recipe, err := getRecipeByIdWithTx(r.ctx, tx, recipeID)
+		if err != nil {
+			log.Println("error getting recipe", err)
+			tx.Rollback()
+			//return nil, err
+			ch <- val{
+				nil,
+				NewRecipeServiceError(
+					ErrUnknownRecipe,
+					fmt.Sprintf("error getting recipe: %v", err),
+				),
+			}
+			return
+		}
+
+		err = tx.Commit().Error
+		if err != nil {
+			log.Println("error getting recipe", err)
+			//return nil, NewRecipeServiceError(ErrUnknownRecipe, fmt.Sprintf("error getting recipe: %v", err))
+			ch <- val{
+				nil,
+				NewRecipeServiceError(
+					ErrUnknownRecipe,
+					fmt.Sprintf("error getting recipe: %v", err),
+				),
+			}
+			return
+		}
+		ch <- val{recipe, nil}
+	}()
+
+	select {
+	case v := <-ch:
+		return v.recipe, v.err
+	case <-ctx.Done():
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			return nil, NewRecipeServiceError(ErrUnknownRecipe, "timeout adding instruction")
+		} else {
+			return nil, NewRecipeServiceError(ErrUnknownRecipe, "timeout cancelled without error")
+		}
+	}
 }
 
 func (r *recipeService) UpdateRecipe(recipeID uint, name, description string) (*domain.Recipe, error) {
-	var recipe domain.Recipe
+	ctx, cancel := context.WithTimeout(r.ctx, 5*time.Second)
 
-	err := r.db.First(&recipe, recipeID).Error
-	if err != nil {
-		log.Println("error getting recipe", err)
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, NewRecipeServiceError(ErrRecipeNotFound, fmt.Sprintf("recipe %d not found", recipeID))
+	defer cancel()
+	ch := make(chan val)
+
+	go func() {
+		defer cancel()
+
+		tx := r.db.Begin()
+
+		recipe, err := getRecipeByIdWithTx(r.ctx, tx, recipeID)
+		if err != nil {
+			tx.Rollback()
+			ch <- val{
+				nil,
+				err,
+			}
+			return
 		}
-		return nil, NewRecipeServiceError(ErrUnknownRecipe, fmt.Sprintf("error getting recipe: %v", err))
-	}
 
-	if name != "" {
-		recipe.Name = name
-	}
-	if description != "" {
-		recipe.Description = description
-	}
+		if name != "" {
+			recipe.Name = name
+		}
+		if description != "" {
+			recipe.Description = description
+		}
 
-	err = r.db.Save(&recipe).Error
-	if err != nil {
-		log.Println("error saving recipe", err)
-		return nil, NewRecipeServiceError(ErrUnknownRecipe, fmt.Sprintf("error saving recipe: %v", err))
-	}
+		err = tx.Save(&recipe).Error
+		if err != nil {
+			tx.Rollback()
+			log.Println("error saving recipe", err)
+			//return nil, NewRecipeServiceError(ErrUnknownRecipe, fmt.Sprintf("error saving recipe: %v", err))
+			ch <- val{
+				nil,
+				NewRecipeServiceError(
+					ErrUnknownRecipe,
+					fmt.Sprintf("error saving recipe: %v", err),
+				),
+			}
+			return
+		}
 
-	return &recipe, nil
+		err = tx.Commit().Error
+		if err != nil {
+			log.Println("error committing transaction", err)
+			ch <- val{
+				nil,
+				NewRecipeServiceError(
+					ErrUnknownRecipe,
+					fmt.Sprintf("error committing transaction: %v", err),
+				),
+			}
+			return
+		}
+		ch <- val{recipe, nil}
+	}()
+
+	select {
+	case v := <-ch:
+		return v.recipe, v.err
+	case <-ctx.Done():
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			return nil, NewRecipeServiceError(ErrUnknownRecipe, "timeout updating recipe")
+		}
+		return nil, NewRecipeServiceError(ErrUnknownRecipe, "timeout cancelled without error")
+	}
 }
 
 func (r *recipeService) UpdateIngredient(recipeID, ingredientID uint, name, qty, unit string) (*domain.Recipe, error) {
-	tx := r.db.Begin()
-	defer recoverTx(tx)
+	ctx, cancel := context.WithTimeout(r.ctx, 5*time.Second)
+	defer cancel()
+	ch := make(chan val)
 
-	var ingredient domain.Ingredient
-	err := tx.First(&ingredient, ingredientID).Error
-	if err != nil {
-		log.Println("error getting ingredient", err)
-		if errors.Is(err, gorm.ErrRecordNotFound) {
+	go func() {
+		defer cancel()
+		tx := r.db.Begin()
+		defer recoverTx(tx)
+
+		var ingredient domain.Ingredient
+		err := tx.First(&ingredient, ingredientID).Error
+		if err != nil {
+			log.Println("error getting ingredient", err)
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				tx.Rollback()
+				//return nil, NewRecipeServiceError(ErrIngredientNotFound, fmt.Sprintf("ingredient %d not found", ingredientID))
+				ch <- val{
+					nil,
+					NewRecipeServiceError(
+						ErrIngredientNotFound,
+						fmt.Sprintf("ingredient %d not found", ingredientID),
+					),
+				}
+				return
+			}
 			tx.Rollback()
-			return nil, NewRecipeServiceError(ErrIngredientNotFound, fmt.Sprintf("ingredient %d not found", ingredientID))
+			//return nil, err
+			ch <- val{
+				nil,
+				NewRecipeServiceError(
+					ErrUnknownRecipe,
+					fmt.Sprintf("error getting ingredient: %v", err),
+				),
+			}
+			return
 		}
-		tx.Rollback()
-		return nil, err
-	}
 
-	if ingredient.RecipeID != recipeID {
-		err := fmt.Sprintf("ingredient %d does not belong to recipe %d", ingredientID, recipeID)
-		log.Println(err)
-		tx.Rollback()
-		return nil, NewRecipeServiceError(ErrIngredientConflict, err)
-	}
+		if ingredient.RecipeID != recipeID {
+			err := fmt.Sprintf("ingredient %d does not belong to recipe %d", ingredientID, recipeID)
+			log.Println(err)
+			tx.Rollback()
+			//return nil, NewRecipeServiceError(ErrIngredientConflict, err)
+			ch <- val{
+				nil,
+				NewRecipeServiceError(
+					ErrIngredientConflict,
+					err,
+				),
+			}
+			return
+		}
 
-	if name != "" {
-		ingredient.Name = name
-	}
-	if qty != "" {
-		ingredient.Quantity = qty
-	}
-	if unit != "" {
-		ingredient.Unit = unit
-	}
+		if name != "" {
+			ingredient.Name = name
+		}
+		if qty != "" {
+			ingredient.Quantity = qty
+		}
+		if unit != "" {
+			ingredient.Unit = unit
+		}
 
-	err = tx.Save(&ingredient).Error
-	if err != nil {
-		log.Println("error saving ingredient", err)
-		tx.Rollback()
-		return nil, NewRecipeServiceError(ErrUnknownRecipe, fmt.Sprintf("error saving ingredient: %v", err))
-	}
+		err = tx.Save(&ingredient).Error
+		if err != nil {
+			log.Println("error saving ingredient", err)
+			tx.Rollback()
+			//return nil, NewRecipeServiceError(ErrUnknownRecipe, fmt.Sprintf("error saving ingredient: %v", err))
+			ch <- val{
+				nil,
+				NewRecipeServiceError(
+					ErrUnknownRecipe,
+					fmt.Sprintf("error saving ingredient: %v", err),
+				),
+			}
+			return
+		}
 
-	recipe, err := getRecipeByIdWithTx(tx, ingredient.RecipeID)
-	if err != nil {
-		log.Println("error getting recipe", err)
-		tx.Rollback()
-		return nil, err
-	}
+		recipe, err := getRecipeByIdWithTx(r.ctx, tx, ingredient.RecipeID)
+		if err != nil {
+			log.Println("error getting recipe", err)
+			tx.Rollback()
+			//return nil, err
+			ch <- val{
+				nil,
+				err,
+			}
+			return
+		}
 
-	err = tx.Commit().Error
-	if err != nil {
-		log.Println("error getting recipe", err)
-		return nil, NewRecipeServiceError(ErrUnknownRecipe, fmt.Sprintf("error getting recipe: %v", err))
-	}
+		err = tx.Commit().Error
+		if err != nil {
+			log.Println("error getting recipe", err)
+			//return nil, NewRecipeServiceError(ErrUnknownRecipe, fmt.Sprintf("error getting recipe: %v", err))
+			ch <- val{
+				nil,
+				NewRecipeServiceError(
+					ErrUnknownRecipe,
+					fmt.Sprintf("error getting recipe: %v", err),
+				),
+			}
+			return
+		}
+		ch <- val{recipe, nil}
+	}()
 
-	return recipe, nil
+	select {
+	case v := <-ch:
+		return v.recipe, v.err
+	case <-ctx.Done():
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			return nil, NewRecipeServiceError(ErrUnknownRecipe, "timeout updating ingredient")
+		}
+		return nil, NewRecipeServiceError(ErrUnknownRecipe, "timeout cancelled without error")
+	}
 }
 
 func (r *recipeService) DeleteIngredient(recipeID, ingredientID uint) error {
-	tx := r.db.Begin()
-	defer recoverTx(tx)
+	ctx, cancel := context.WithTimeout(r.ctx, 5*time.Second)
+	errCh := make(chan error)
 
-	var ingredient domain.Ingredient
+	go func() {
+		defer cancel()
+		log.Println("deleting ingredient", recipeID, ingredientID)
+		tx := r.db.Begin()
+		defer recoverTx(tx)
 
-	err := tx.First(&ingredient, ingredientID).Error
-	if err != nil {
-		log.Println("error getting ingredient", err)
-		tx.Rollback()
-		return NewRecipeServiceError(ErrIngredientNotFound, fmt.Sprintf("ingredient %d not found", ingredientID))
+		var ingredient domain.Ingredient
+
+		err := tx.First(&ingredient, ingredientID).Error
+		if err != nil {
+			log.Println("error getting ingredient", err)
+			tx.Rollback()
+			errCh <- NewRecipeServiceError(ErrIngredientNotFound, fmt.Sprintf("ingredient %d not found", ingredientID))
+			return
+		}
+		log.Println("got ingredient", ingredient)
+
+		if ingredient.RecipeID != recipeID {
+			err := fmt.Sprintf("ingredient %d does not belong to recipe %d", ingredientID, recipeID)
+			log.Println(err)
+			tx.Rollback()
+			errCh <- NewRecipeServiceError(ErrIngredientConflict, err)
+			return
+		}
+
+		err = tx.Delete(&ingredient).Error
+		if err != nil {
+			log.Println("error deleting ingredient", err)
+			tx.Rollback()
+			errCh <- NewRecipeServiceError(ErrUnknownRecipe, fmt.Sprintf("error deleting ingredient: %v", err))
+			return
+		}
+		tx.Commit()
+		log.Println("deleted ingredient", ingredient)
+	}()
+
+	select {
+	case err := <-errCh:
+		return err
+	case <-ctx.Done():
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			return NewRecipeServiceError(ErrUnknownRecipe, "timeout deleting ingredient")
+		} else {
+			return nil
+		}
+
 	}
-	if ingredient.RecipeID != recipeID {
-		err := fmt.Sprintf("ingredient %d does not belong to recipe %d", ingredientID, recipeID)
-		log.Println(err)
-		tx.Rollback()
-		return NewRecipeServiceError(ErrIngredientConflict, err)
-	}
-
-	err = tx.Delete(&ingredient).Error
-	if err != nil {
-		log.Println("error deleting ingredient", err)
-		tx.Rollback()
-		return NewRecipeServiceError(ErrUnknownRecipe, fmt.Sprintf("error deleting ingredient: %v", err))
-	}
-
-	return nil
 }
 
 func (r *recipeService) UpdateInstruction(recipeID, instructionID uint, contents string) (*domain.Recipe, error) {
-	tx := r.db.Begin()
-	defer recoverTx(tx)
+	ctx, cancel := context.WithTimeout(r.ctx, 5*time.Second)
+	defer cancel()
+	ch := make(chan val)
 
-	var instruction domain.Instruction
-	err := tx.First(&instruction, instructionID).Error
-	if err != nil {
-		log.Println("error getting instruction", err)
-		tx.Rollback()
-		return nil, NewRecipeServiceError(ErrInstructionNotFound, fmt.Sprintf("instruction %d not found", instructionID))
+	go func() {
+		defer cancel()
+		tx := r.db.Begin()
+		defer recoverTx(tx)
+
+		var instruction domain.Instruction
+		err := tx.First(&instruction, instructionID).Error
+		if err != nil {
+			log.Println("error getting instruction", err)
+			tx.Rollback()
+			//return nil, NewRecipeServiceError(ErrInstructionNotFound, fmt.Sprintf("instruction %d not found", instructionID))
+			ch <- val{
+				nil,
+				NewRecipeServiceError(
+					ErrInstructionNotFound,
+					fmt.Sprintf("instruction %d not found", instructionID),
+				),
+			}
+			return
+		}
+
+		if instruction.RecipeID != recipeID {
+			err := fmt.Sprintf("instruction %d does not belong to recipe %d", instructionID, recipeID)
+			log.Println(err)
+			tx.Rollback()
+			//return nil, NewRecipeServiceError(ErrInstructionConflict, err)
+			ch <- val{
+				nil,
+				NewRecipeServiceError(
+					ErrInstructionConflict,
+					err,
+				),
+			}
+			return
+		}
+
+		if contents != "" {
+			instruction.Contents = contents
+		}
+
+		err = tx.Save(&instruction).Error
+		if err != nil {
+			log.Println("error saving instruction", err)
+			tx.Rollback()
+			//return nil, NewRecipeServiceError(ErrUnknownRecipe, fmt.Sprintf("error saving instruction: %v", err))
+			ch <- val{
+				nil,
+				NewRecipeServiceError(
+					ErrUnknownRecipe,
+					fmt.Sprintf("error saving instruction: %v", err),
+				),
+			}
+			return
+		}
+
+		recipe, err := getRecipeByIdWithTx(context.Background(), tx, instruction.RecipeID)
+		if err != nil {
+			log.Println("error getting recipe", err)
+			tx.Rollback()
+			//return nil, err
+			ch <- val{
+				nil,
+				err,
+			}
+			return
+		}
+
+		err = tx.Commit().Error
+		if err != nil {
+			log.Println("error getting recipe", err)
+			//return nil, NewRecipeServiceError(ErrUnknownRecipe, fmt.Sprintf("error getting recipe: %v", err))
+			ch <- val{
+				nil,
+				NewRecipeServiceError(
+					ErrUnknownRecipe,
+					fmt.Sprintf("error getting recipe: %v", err),
+				),
+			}
+			return
+		}
+
+		ch <- val{recipe, nil}
+	}()
+
+	select {
+	case v := <-ch:
+		return v.recipe, v.err
+	case <-ctx.Done():
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			return nil, NewRecipeServiceError(ErrUnknownRecipe, "timeout updating instruction")
+		}
+		return nil, NewRecipeServiceError(ErrUnknownRecipe, "timeout cancelled without error")
 	}
-
-	if instruction.RecipeID != recipeID {
-		err := fmt.Sprintf("instruction %d does not belong to recipe %d", instructionID, recipeID)
-		log.Println(err)
-		tx.Rollback()
-		return nil, NewRecipeServiceError(ErrInstructionConflict, err)
-	}
-
-	if contents != "" {
-		instruction.Contents = contents
-	}
-
-	err = tx.Save(&instruction).Error
-	if err != nil {
-		log.Println("error saving instruction", err)
-		tx.Rollback()
-		return nil, NewRecipeServiceError(ErrUnknownRecipe, fmt.Sprintf("error saving instruction: %v", err))
-	}
-
-	recipe, err := getRecipeByIdWithTx(tx, instruction.RecipeID)
-	if err != nil {
-		log.Println("error getting recipe", err)
-		tx.Rollback()
-		return nil, err
-	}
-
-	err = tx.Commit().Error
-	if err != nil {
-		log.Println("error getting recipe", err)
-		return nil, NewRecipeServiceError(ErrUnknownRecipe, fmt.Sprintf("error getting recipe: %v", err))
-	}
-
-	return recipe, nil
 }
 
 func (r *recipeService) SwapInstructions(recipeID, instructionOneID, instructionTwoID uint) (*domain.Recipe, error) {
-	tx := r.db.Begin()
-	defer recoverTx(tx)
+	ctx, cancel := context.WithTimeout(r.ctx, 5*time.Second)
+	defer cancel()
+	ch := make(chan val)
 
-	var instructionOne domain.Instruction
-	err := tx.First(&instructionOne, instructionOneID).Error
-	if err != nil {
-		log.Println("error getting instruction one", err)
-		tx.Rollback()
-		return nil, NewRecipeServiceError(ErrInstructionNotFound, fmt.Sprintf("instruction %d not found", instructionOneID))
+	go func() {
+
+		tx := r.db.Begin()
+		defer recoverTx(tx)
+
+		var instructionOne domain.Instruction
+		err := tx.First(&instructionOne, instructionOneID).Error
+		if err != nil {
+			log.Println("error getting instruction one", err)
+			tx.Rollback()
+			//return nil, NewRecipeServiceError(ErrInstructionNotFound, fmt.Sprintf("instruction %d not found", instructionOneID))
+			ch <- val{
+				nil,
+				NewRecipeServiceError(
+					ErrInstructionNotFound,
+					fmt.Sprintf("instruction %d not found", instructionOneID),
+				),
+			}
+			return
+		}
+
+		var instructionTwo domain.Instruction
+		err = tx.First(&instructionTwo, instructionTwoID).Error
+		if err != nil {
+			log.Println("error getting instruction two", err)
+			tx.Rollback()
+			//return nil, NewRecipeServiceError(ErrInstructionNotFound, fmt.Sprintf("instruction %d not found", instructionTwoID))
+			ch <- val{
+				nil,
+				NewRecipeServiceError(
+					ErrInstructionNotFound,
+					fmt.Sprintf("instruction %d not found", instructionTwoID),
+				),
+			}
+			return
+		}
+
+		if instructionOne.RecipeID != recipeID || instructionTwo.RecipeID != recipeID {
+			err := fmt.Sprintf("instructions do not belong to recipe %d", recipeID)
+			log.Println(err)
+			tx.Rollback()
+			//return nil, NewRecipeServiceError(ErrInstructionConflict, err)
+			ch <- val{
+				nil,
+				NewRecipeServiceError(
+					ErrInstructionConflict,
+					err,
+				),
+			}
+			return
+		}
+
+		instructionOne.Step, instructionTwo.Step = instructionTwo.Step, instructionOne.Step
+
+		err = tx.Save(&instructionOne).Error
+		if err != nil {
+			log.Println("error saving instruction one", err)
+			tx.Rollback()
+			//return nil, NewRecipeServiceError(ErrUnknownRecipe, fmt.Sprintf("error saving instruction one: %v", err))
+			ch <- val{
+				nil,
+				NewRecipeServiceError(
+					ErrUnknownRecipe,
+					fmt.Sprintf("error saving instruction one: %v", err),
+				),
+			}
+			return
+		}
+
+		err = tx.Save(&instructionTwo).Error
+		if err != nil {
+			log.Println("error saving instruction two", err)
+			tx.Rollback()
+			//return nil, NewRecipeServiceError(ErrUnknownRecipe, fmt.Sprintf("error saving instruction two: %v", err))
+			ch <- val{
+				nil,
+				NewRecipeServiceError(
+					ErrUnknownRecipe,
+					fmt.Sprintf("error saving instruction two: %v", err),
+				),
+			}
+			return
+		}
+
+		recipe, err := getRecipeByIdWithTx(context.Background(), tx, recipeID)
+		if err != nil {
+			log.Println("error getting recipe", err)
+			tx.Rollback()
+			//return nil, err
+			ch <- val{
+				nil,
+				err,
+			}
+			return
+		}
+
+		err = tx.Commit().Error
+		if err != nil {
+			log.Println("error getting recipe", err)
+			//return nil, NewRecipeServiceError(ErrUnknownRecipe, fmt.Sprintf("error getting recipe: %v", err))
+			ch <- val{
+				nil,
+				NewRecipeServiceError(
+					ErrUnknownRecipe,
+					fmt.Sprintf("error commiting transaction: %v", err),
+				),
+			}
+		}
+
+		ch <- val{recipe, nil}
+	}()
+
+	//return recipe, nil
+	select {
+	case v := <-ch:
+		return v.recipe, v.err
+	case <-ctx.Done():
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			return nil, NewRecipeServiceError(ErrUnknownRecipe, "timeout swapping instructions")
+		}
+		return nil, NewRecipeServiceError(ErrUnknownRecipe, "timeout cancelled without error")
 	}
-
-	var instructionTwo domain.Instruction
-	err = tx.First(&instructionTwo, instructionTwoID).Error
-	if err != nil {
-		log.Println("error getting instruction two", err)
-		tx.Rollback()
-		return nil, NewRecipeServiceError(ErrInstructionNotFound, fmt.Sprintf("instruction %d not found", instructionTwoID))
-	}
-
-	if instructionOne.RecipeID != recipeID || instructionTwo.RecipeID != recipeID {
-		err := fmt.Sprintf("instructions do not belong to recipe %d", recipeID)
-		log.Println(err)
-		tx.Rollback()
-		return nil, NewRecipeServiceError(ErrInstructionConflict, err)
-	}
-
-	instructionOne.Step, instructionTwo.Step = instructionTwo.Step, instructionOne.Step
-
-	err = tx.Save(&instructionOne).Error
-	if err != nil {
-		log.Println("error saving instruction one", err)
-		tx.Rollback()
-		return nil, NewRecipeServiceError(ErrUnknownRecipe, fmt.Sprintf("error saving instruction one: %v", err))
-	}
-
-	err = tx.Save(&instructionTwo).Error
-	if err != nil {
-		log.Println("error saving instruction two", err)
-		tx.Rollback()
-		return nil, NewRecipeServiceError(ErrUnknownRecipe, fmt.Sprintf("error saving instruction two: %v", err))
-	}
-
-	recipe, err := getRecipeByIdWithTx(tx, recipeID)
-	if err != nil {
-		log.Println("error getting recipe", err)
-		tx.Rollback()
-		return nil, err
-	}
-
-	err = tx.Commit().Error
-	if err != nil {
-		log.Println("error getting recipe", err)
-		return nil, NewRecipeServiceError(ErrUnknownRecipe, fmt.Sprintf("error getting recipe: %v", err))
-	}
-
-	return recipe, nil
 }
 
 func recoverTx(tx *gorm.DB) {

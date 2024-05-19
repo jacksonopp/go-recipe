@@ -204,6 +204,7 @@ func (h *RecipeHandler) updateIngredient(c *fiber.Ctx) error {
 
 // DELETE /recipe/:id/ingredient/:ingredientId
 func (h *RecipeHandler) deleteIngredient(c *fiber.Ctx) error {
+	log.Println("delete ingredient")
 	recipeID, err := strconv.Atoi(c.Params("id"))
 	if err != nil {
 		return SendError(c, BadRequest("id must be an integer"))
@@ -213,6 +214,8 @@ func (h *RecipeHandler) deleteIngredient(c *fiber.Ctx) error {
 	if err != nil {
 		return SendError(c, BadRequest("ingredientId must be an integer"))
 	}
+
+	log.Println(recipeID, ingredientID)
 
 	err = h.recipeService.DeleteIngredient(uint(recipeID), uint(ingredientID))
 	if err != nil {
@@ -227,7 +230,6 @@ func (h *RecipeHandler) deleteIngredient(c *fiber.Ctx) error {
 	}
 
 	return c.SendStatus(fiber.StatusNoContent)
-
 }
 
 // POST /recipe/:id/ingredient
