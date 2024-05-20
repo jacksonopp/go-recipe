@@ -3,7 +3,10 @@ package services
 import (
 	"crypto/rand"
 	"golang.org/x/crypto/bcrypt"
+	"time"
 )
+
+const DEFAULT_TIMEOUT = 5 * time.Second
 
 func hashPassword(password, salt string) (string, error) {
 	passAndSalt := password + salt

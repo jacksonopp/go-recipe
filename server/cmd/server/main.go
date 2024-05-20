@@ -24,14 +24,17 @@ func main() {
 	app.Use(logger.New())
 	api := app.Group("/api")
 
-	userHandler := handlers.NewAuthHandler(api, db)
+	authHandler := handlers.NewAuthHandler(api, db)
 	recipeHandler := handlers.NewRecipeHandler(api, db)
-	createApiRoutes(userHandler, recipeHandler)
+	userHandler := handlers.NewUserHandler(api, db)
+
+	createApiRoutes(authHandler, recipeHandler, userHandler)
 
 	sessionService := services.NewSessionService(db)
-	// TODO figure out what to do with done channel
+
 	done, err := sessionService.PruneOnSchedule(time.Hour * 24)
 	if err != nil {
+		// ? is this the best use for the ch done?
 		done <- true
 		log.Printf("ERROR: failed to prune session %v", err)
 	}

@@ -47,12 +47,9 @@ func (h *RecipeHandler) RegisterRoutes() {
 
 // POST /recipe/
 func (h *RecipeHandler) createRecipe(c *fiber.Ctx) error {
-	var user domain.User
-	if u, ok := c.Locals("user").(*domain.User); !ok {
-		log.Println("no user")
-		return SendError(c, Unauthorized())
-	} else {
-		user = *u
+	user, err := getUserFromLocals(c)
+	if err != nil {
+		return SendError(c, err.(APIError))
 	}
 
 	recipe := struct {
@@ -75,7 +72,7 @@ func (h *RecipeHandler) createRecipe(c *fiber.Ctx) error {
 
 	recipe.UserID = user.ID
 
-	err := h.recipeService.CreateRecipe(recipe.UserID, recipe.Name, recipe.Description)
+	err = h.recipeService.CreateRecipe(recipe.UserID, recipe.Name, recipe.Description)
 	if err != nil {
 		log.Println("error creating recipe", err)
 		return SendError(c, InternalServerError())
@@ -182,7 +179,7 @@ func (h *RecipeHandler) createIngredient(c *fiber.Ctx) error {
 
 	recipe, err := h.recipeService.AddIngredientToRecipe(uint(id), ingredient.Name, ingredient.Quantity, ingredient.Unit)
 	if err != nil {
-		if err.(services.RecipeServiceError).Code == services.ErrRecipeNotFound {
+		if v, ok := err.(services.RecipeServiceError); ok && v.Code == services.ErrRecipeNotFound {
 			return SendError(c, NotFound(map[string]string{"error": "recipe not found"}))
 		}
 		log.Println("error creating ingredient", err)
@@ -252,10 +249,10 @@ func (h *RecipeHandler) deleteIngredient(c *fiber.Ctx) error {
 
 	err = h.recipeService.DeleteIngredient(uint(recipeID), uint(ingredientID))
 	if err != nil {
-		if err.(services.RecipeServiceError).Code == services.ErrRecipeNotFound {
+		if v, ok := err.(services.RecipeServiceError); ok && v.Code == services.ErrRecipeNotFound {
 			return SendError(c, NotFound(map[string]string{"error": "recipe not found"}))
 		}
-		if err.(services.RecipeServiceError).Code == services.ErrIngredientConflict {
+		if v, ok := err.(services.RecipeServiceError); ok && v.Code == services.ErrIngredientConflict {
 			return SendError(c, Conflict(map[string]string{"error": "ingredient does not belong to recipe"}))
 		}
 		log.Println("error deleting ingredient", err)
@@ -377,4 +374,15 @@ func (h *RecipeHandler) deleteInstruction(c *fiber.Ctx) error {
 	}
 
 	return c.SendStatus(fiber.StatusNoContent)
+}
+
+func getUserFromLocals(c *fiber.Ctx) (domain.User, error) {
+	var user domain.User
+	if u, ok := c.Locals("user").(*domain.User); !ok {
+		log.Println("no user")
+		return domain.User{}, Unauthorized()
+	} else {
+		user = *u
+	}
+	return user, nil
 }

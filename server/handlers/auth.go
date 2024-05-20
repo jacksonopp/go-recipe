@@ -19,7 +19,7 @@ func NewAuthHandler(r fiber.Router, db *gorm.DB) *AuthHandler {
 	authService := services.NewAuthService(db)
 	sessionService := services.NewSessionService(db)
 
-	subpath := r.Group("/user")
+	subpath := r.Group("/auth")
 
 	return &AuthHandler{r: subpath, authService: authService, sessionService: sessionService}
 }

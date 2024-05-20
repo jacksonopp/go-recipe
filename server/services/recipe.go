@@ -66,7 +66,7 @@ func NewRecipeService(db *gorm.DB) RecipeService {
 	return &recipeService{db: db, ctx: ctx}
 }
 
-type val struct {
+type recipeVal struct {
 	recipe *domain.Recipe
 	err    error
 }
@@ -167,7 +167,7 @@ func (r *recipeService) DeleteRecipe(recipeID uint) error {
 func (r *recipeService) AddIngredientToRecipe(recipeID uint, name, quantity, unit string) (*domain.Recipe, error) {
 	ctx, cancel := context.WithTimeout(r.ctx, 5*time.Second)
 	defer cancel()
-	ch := make(chan val)
+	ch := make(chan recipeVal)
 
 	go func() {
 		defer cancel()
@@ -183,7 +183,7 @@ func (r *recipeService) AddIngredientToRecipe(recipeID uint, name, quantity, uni
 		if err != nil {
 			log.Println("error creating ingredient", err)
 			tx.Rollback()
-			ch <- val{
+			ch <- recipeVal{
 				nil,
 				NewRecipeServiceError(
 					ErrUnknownRecipe,
@@ -195,7 +195,7 @@ func (r *recipeService) AddIngredientToRecipe(recipeID uint, name, quantity, uni
 		recipe, err := getRecipeByIdWithTx(r.ctx, tx, recipeID)
 		if err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
-				ch <- val{
+				ch <- recipeVal{
 					nil,
 					NewRecipeServiceError(
 						ErrRecipeNotFound,
@@ -206,7 +206,7 @@ func (r *recipeService) AddIngredientToRecipe(recipeID uint, name, quantity, uni
 			}
 			log.Println("error getting recipe", err)
 			tx.Rollback()
-			ch <- val{
+			ch <- recipeVal{
 				nil,
 				NewRecipeServiceError(
 					ErrUnknownRecipe,
@@ -217,7 +217,7 @@ func (r *recipeService) AddIngredientToRecipe(recipeID uint, name, quantity, uni
 		}
 		if err := tx.Commit().Error; err != nil {
 			log.Println("error committing transaction", err)
-			ch <- val{
+			ch <- recipeVal{
 				nil,
 				NewRecipeServiceError(
 					ErrUnknownRecipe,
@@ -226,7 +226,7 @@ func (r *recipeService) AddIngredientToRecipe(recipeID uint, name, quantity, uni
 			}
 			return
 		}
-		ch <- val{recipe, nil}
+		ch <- recipeVal{recipe, nil}
 	}()
 
 	//return recipe, nil
@@ -247,7 +247,7 @@ func (r *recipeService) UpdateRecipe(recipeID uint, name, description string) (*
 	ctx, cancel := context.WithTimeout(r.ctx, 5*time.Second)
 
 	defer cancel()
-	ch := make(chan val)
+	ch := make(chan recipeVal)
 
 	go func() {
 		defer cancel()
@@ -257,7 +257,7 @@ func (r *recipeService) UpdateRecipe(recipeID uint, name, description string) (*
 		recipe, err := getRecipeByIdWithTx(r.ctx, tx, recipeID)
 		if err != nil {
 			tx.Rollback()
-			ch <- val{
+			ch <- recipeVal{
 				nil,
 				err,
 			}
@@ -276,7 +276,7 @@ func (r *recipeService) UpdateRecipe(recipeID uint, name, description string) (*
 			tx.Rollback()
 			log.Println("error saving recipe", err)
 			//return nil, NewRecipeServiceError(ErrUnknownRecipe, fmt.Sprintf("error saving recipe: %v", err))
-			ch <- val{
+			ch <- recipeVal{
 				nil,
 				NewRecipeServiceError(
 					ErrUnknownRecipe,
@@ -289,7 +289,7 @@ func (r *recipeService) UpdateRecipe(recipeID uint, name, description string) (*
 		err = tx.Commit().Error
 		if err != nil {
 			log.Println("error committing transaction", err)
-			ch <- val{
+			ch <- recipeVal{
 				nil,
 				NewRecipeServiceError(
 					ErrUnknownRecipe,
@@ -298,7 +298,7 @@ func (r *recipeService) UpdateRecipe(recipeID uint, name, description string) (*
 			}
 			return
 		}
-		ch <- val{recipe, nil}
+		ch <- recipeVal{recipe, nil}
 	}()
 
 	select {
@@ -316,7 +316,7 @@ func (r *recipeService) UpdateRecipe(recipeID uint, name, description string) (*
 func (r *recipeService) UpdateIngredient(recipeID, ingredientID uint, name, qty, unit string) (*domain.Recipe, error) {
 	ctx, cancel := context.WithTimeout(r.ctx, 5*time.Second)
 	defer cancel()
-	ch := make(chan val)
+	ch := make(chan recipeVal)
 
 	go func() {
 		defer cancel()
@@ -330,7 +330,7 @@ func (r *recipeService) UpdateIngredient(recipeID, ingredientID uint, name, qty,
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				tx.Rollback()
 				//return nil, NewRecipeServiceError(ErrIngredientNotFound, fmt.Sprintf("ingredient %d not found", ingredientID))
-				ch <- val{
+				ch <- recipeVal{
 					nil,
 					NewRecipeServiceError(
 						ErrIngredientNotFound,
@@ -341,7 +341,7 @@ func (r *recipeService) UpdateIngredient(recipeID, ingredientID uint, name, qty,
 			}
 			tx.Rollback()
 			//return nil, err
-			ch <- val{
+			ch <- recipeVal{
 				nil,
 				NewRecipeServiceError(
 					ErrUnknownRecipe,
@@ -356,7 +356,7 @@ func (r *recipeService) UpdateIngredient(recipeID, ingredientID uint, name, qty,
 			log.Println(err)
 			tx.Rollback()
 			//return nil, NewRecipeServiceError(ErrIngredientConflict, err)
-			ch <- val{
+			ch <- recipeVal{
 				nil,
 				NewRecipeServiceError(
 					ErrIngredientConflict,
@@ -381,7 +381,7 @@ func (r *recipeService) UpdateIngredient(recipeID, ingredientID uint, name, qty,
 			log.Println("error saving ingredient", err)
 			tx.Rollback()
 			//return nil, NewRecipeServiceError(ErrUnknownRecipe, fmt.Sprintf("error saving ingredient: %v", err))
-			ch <- val{
+			ch <- recipeVal{
 				nil,
 				NewRecipeServiceError(
 					ErrUnknownRecipe,
@@ -396,7 +396,7 @@ func (r *recipeService) UpdateIngredient(recipeID, ingredientID uint, name, qty,
 			log.Println("error getting recipe", err)
 			tx.Rollback()
 			//return nil, err
-			ch <- val{
+			ch <- recipeVal{
 				nil,
 				err,
 			}
@@ -407,7 +407,7 @@ func (r *recipeService) UpdateIngredient(recipeID, ingredientID uint, name, qty,
 		if err != nil {
 			log.Println("error getting recipe", err)
 			//return nil, NewRecipeServiceError(ErrUnknownRecipe, fmt.Sprintf("error getting recipe: %v", err))
-			ch <- val{
+			ch <- recipeVal{
 				nil,
 				NewRecipeServiceError(
 					ErrUnknownRecipe,
@@ -416,7 +416,7 @@ func (r *recipeService) UpdateIngredient(recipeID, ingredientID uint, name, qty,
 			}
 			return
 		}
-		ch <- val{recipe, nil}
+		ch <- recipeVal{recipe, nil}
 	}()
 
 	select {
@@ -490,7 +490,7 @@ func (r *recipeService) DeleteIngredient(recipeID, ingredientID uint) error {
 func (r *recipeService) AddInstructionToRecipe(recipeID uint, step int, contents string) (*domain.Recipe, error) {
 	ctx, cancel := context.WithTimeout(r.ctx, 5*time.Second)
 	defer cancel()
-	ch := make(chan val)
+	ch := make(chan recipeVal)
 
 	go func() {
 		defer cancel()
@@ -506,7 +506,7 @@ func (r *recipeService) AddInstructionToRecipe(recipeID uint, step int, contents
 			log.Println("error creating instruction", err)
 			tx.Rollback()
 			//return nil, NewRecipeServiceError(ErrUnknownRecipe, fmt.Sprintf("error creating instruction: %v", err))
-			ch <- val{
+			ch <- recipeVal{
 				nil,
 				NewRecipeServiceError(
 					ErrUnknownRecipe,
@@ -521,7 +521,7 @@ func (r *recipeService) AddInstructionToRecipe(recipeID uint, step int, contents
 			log.Println("error getting recipe", err)
 			tx.Rollback()
 			//return nil, err
-			ch <- val{
+			ch <- recipeVal{
 				nil,
 				NewRecipeServiceError(
 					ErrUnknownRecipe,
@@ -535,7 +535,7 @@ func (r *recipeService) AddInstructionToRecipe(recipeID uint, step int, contents
 		if err != nil {
 			log.Println("error getting recipe", err)
 			//return nil, NewRecipeServiceError(ErrUnknownRecipe, fmt.Sprintf("error getting recipe: %v", err))
-			ch <- val{
+			ch <- recipeVal{
 				nil,
 				NewRecipeServiceError(
 					ErrUnknownRecipe,
@@ -544,7 +544,7 @@ func (r *recipeService) AddInstructionToRecipe(recipeID uint, step int, contents
 			}
 			return
 		}
-		ch <- val{recipe, nil}
+		ch <- recipeVal{recipe, nil}
 	}()
 
 	select {
@@ -563,7 +563,7 @@ func (r *recipeService) AddInstructionToRecipe(recipeID uint, step int, contents
 func (r *recipeService) UpdateInstruction(recipeID, instructionID uint, contents string) (*domain.Recipe, error) {
 	ctx, cancel := context.WithTimeout(r.ctx, 5*time.Second)
 	defer cancel()
-	ch := make(chan val)
+	ch := make(chan recipeVal)
 
 	go func() {
 		defer cancel()
@@ -576,7 +576,7 @@ func (r *recipeService) UpdateInstruction(recipeID, instructionID uint, contents
 			log.Println("error getting instruction", err)
 			tx.Rollback()
 			//return nil, NewRecipeServiceError(ErrInstructionNotFound, fmt.Sprintf("instruction %d not found", instructionID))
-			ch <- val{
+			ch <- recipeVal{
 				nil,
 				NewRecipeServiceError(
 					ErrInstructionNotFound,
@@ -591,7 +591,7 @@ func (r *recipeService) UpdateInstruction(recipeID, instructionID uint, contents
 			log.Println(err)
 			tx.Rollback()
 			//return nil, NewRecipeServiceError(ErrInstructionConflict, err)
-			ch <- val{
+			ch <- recipeVal{
 				nil,
 				NewRecipeServiceError(
 					ErrInstructionConflict,
@@ -610,7 +610,7 @@ func (r *recipeService) UpdateInstruction(recipeID, instructionID uint, contents
 			log.Println("error saving instruction", err)
 			tx.Rollback()
 			//return nil, NewRecipeServiceError(ErrUnknownRecipe, fmt.Sprintf("error saving instruction: %v", err))
-			ch <- val{
+			ch <- recipeVal{
 				nil,
 				NewRecipeServiceError(
 					ErrUnknownRecipe,
@@ -625,7 +625,7 @@ func (r *recipeService) UpdateInstruction(recipeID, instructionID uint, contents
 			log.Println("error getting recipe", err)
 			tx.Rollback()
 			//return nil, err
-			ch <- val{
+			ch <- recipeVal{
 				nil,
 				err,
 			}
@@ -636,7 +636,7 @@ func (r *recipeService) UpdateInstruction(recipeID, instructionID uint, contents
 		if err != nil {
 			log.Println("error getting recipe", err)
 			//return nil, NewRecipeServiceError(ErrUnknownRecipe, fmt.Sprintf("error getting recipe: %v", err))
-			ch <- val{
+			ch <- recipeVal{
 				nil,
 				NewRecipeServiceError(
 					ErrUnknownRecipe,
@@ -646,7 +646,7 @@ func (r *recipeService) UpdateInstruction(recipeID, instructionID uint, contents
 			return
 		}
 
-		ch <- val{recipe, nil}
+		ch <- recipeVal{recipe, nil}
 	}()
 
 	select {
@@ -664,7 +664,7 @@ func (r *recipeService) UpdateInstruction(recipeID, instructionID uint, contents
 func (r *recipeService) SwapInstructions(recipeID, instructionOneID, instructionTwoID uint) (*domain.Recipe, error) {
 	ctx, cancel := context.WithTimeout(r.ctx, 5*time.Second)
 	defer cancel()
-	ch := make(chan val)
+	ch := make(chan recipeVal)
 
 	go func() {
 
@@ -677,7 +677,7 @@ func (r *recipeService) SwapInstructions(recipeID, instructionOneID, instruction
 			log.Println("error getting instruction one", err)
 			tx.Rollback()
 			//return nil, NewRecipeServiceError(ErrInstructionNotFound, fmt.Sprintf("instruction %d not found", instructionOneID))
-			ch <- val{
+			ch <- recipeVal{
 				nil,
 				NewRecipeServiceError(
 					ErrInstructionNotFound,
@@ -693,7 +693,7 @@ func (r *recipeService) SwapInstructions(recipeID, instructionOneID, instruction
 			log.Println("error getting instruction two", err)
 			tx.Rollback()
 			//return nil, NewRecipeServiceError(ErrInstructionNotFound, fmt.Sprintf("instruction %d not found", instructionTwoID))
-			ch <- val{
+			ch <- recipeVal{
 				nil,
 				NewRecipeServiceError(
 					ErrInstructionNotFound,
@@ -708,7 +708,7 @@ func (r *recipeService) SwapInstructions(recipeID, instructionOneID, instruction
 			log.Println(err)
 			tx.Rollback()
 			//return nil, NewRecipeServiceError(ErrInstructionConflict, err)
-			ch <- val{
+			ch <- recipeVal{
 				nil,
 				NewRecipeServiceError(
 					ErrInstructionConflict,
@@ -725,7 +725,7 @@ func (r *recipeService) SwapInstructions(recipeID, instructionOneID, instruction
 			log.Println("error saving instruction one", err)
 			tx.Rollback()
 			//return nil, NewRecipeServiceError(ErrUnknownRecipe, fmt.Sprintf("error saving instruction one: %v", err))
-			ch <- val{
+			ch <- recipeVal{
 				nil,
 				NewRecipeServiceError(
 					ErrUnknownRecipe,
@@ -740,7 +740,7 @@ func (r *recipeService) SwapInstructions(recipeID, instructionOneID, instruction
 			log.Println("error saving instruction two", err)
 			tx.Rollback()
 			//return nil, NewRecipeServiceError(ErrUnknownRecipe, fmt.Sprintf("error saving instruction two: %v", err))
-			ch <- val{
+			ch <- recipeVal{
 				nil,
 				NewRecipeServiceError(
 					ErrUnknownRecipe,
@@ -755,7 +755,7 @@ func (r *recipeService) SwapInstructions(recipeID, instructionOneID, instruction
 			log.Println("error getting recipe", err)
 			tx.Rollback()
 			//return nil, err
-			ch <- val{
+			ch <- recipeVal{
 				nil,
 				err,
 			}
@@ -766,7 +766,7 @@ func (r *recipeService) SwapInstructions(recipeID, instructionOneID, instruction
 		if err != nil {
 			log.Println("error getting recipe", err)
 			//return nil, NewRecipeServiceError(ErrUnknownRecipe, fmt.Sprintf("error getting recipe: %v", err))
-			ch <- val{
+			ch <- recipeVal{
 				nil,
 				NewRecipeServiceError(
 					ErrUnknownRecipe,
@@ -775,7 +775,7 @@ func (r *recipeService) SwapInstructions(recipeID, instructionOneID, instruction
 			}
 		}
 
-		ch <- val{recipe, nil}
+		ch <- recipeVal{recipe, nil}
 	}()
 
 	//return recipe, nil
@@ -848,7 +848,7 @@ func (r *recipeService) DeleteInstruction(recipeID, instructionID uint) error {
 func getRecipeByIdWithTx(ctx context.Context, tx *gorm.DB, id uint) (*domain.Recipe, error) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	ch := make(chan val)
+	ch := make(chan recipeVal)
 
 	go func() {
 		defer cancel()
@@ -858,7 +858,7 @@ func getRecipeByIdWithTx(ctx context.Context, tx *gorm.DB, id uint) (*domain.Rec
 		if err != nil {
 			log.Println("error getting recipe", err)
 			if errors.Is(err, gorm.ErrRecordNotFound) {
-				ch <- val{
+				ch <- recipeVal{
 					nil,
 					NewRecipeServiceError(
 						ErrRecipeNotFound,
@@ -867,7 +867,7 @@ func getRecipeByIdWithTx(ctx context.Context, tx *gorm.DB, id uint) (*domain.Rec
 				}
 				return
 			}
-			ch <- val{
+			ch <- recipeVal{
 				nil,
 				NewRecipeServiceError(
 					ErrUnknownRecipe,
@@ -881,7 +881,7 @@ func getRecipeByIdWithTx(ctx context.Context, tx *gorm.DB, id uint) (*domain.Rec
 		err = tx.Order("instructions.step ASC").Find(&instructions, "recipe_id = ?", id).Error
 		if err != nil {
 			log.Println("error getting instructions", err)
-			ch <- val{
+			ch <- recipeVal{
 				nil,
 				NewRecipeServiceError(
 					ErrUnknownRecipe,
@@ -892,7 +892,7 @@ func getRecipeByIdWithTx(ctx context.Context, tx *gorm.DB, id uint) (*domain.Rec
 		}
 
 		recipe.Instructions = instructions
-		ch <- val{&recipe, nil}
+		ch <- recipeVal{&recipe, nil}
 	}()
 
 	select {
