@@ -28,7 +28,6 @@ func (h *RecipeHandler) RegisterRoutes() {
 	h.r.Get("/:id", h.getRecipeById)
 	h.r.Patch("/:id", AuthMiddleware(h.db), h.updateRecipe)
 	h.r.Delete("/:id", AuthMiddleware(h.db), h.deleteRecipe)
-	// TODO delete recipe
 
 	// INGREDIENTS
 	h.r.Post("/:id/ingredient", AuthMiddleware(h.db), h.createIngredient)
@@ -40,7 +39,8 @@ func (h *RecipeHandler) RegisterRoutes() {
 	h.r.Post("/:id/instruction", AuthMiddleware(h.db), h.createInstruction)
 	h.r.Patch("/:id/instruction/:instructionId", AuthMiddleware(h.db), h.updateInstruction)
 	h.r.Patch("/:id/instruction/:instructionOneId/:instructionTwoId", AuthMiddleware(h.db), h.swapInstructions)
-	//	TODO delete ingredient
+	h.r.Delete("/:id/instruction/:instructionId", AuthMiddleware(h.db), h.deleteInstruction)
+	//	TODO delete instruction
 }
 
 // RECIPES
@@ -357,4 +357,24 @@ func (h *RecipeHandler) swapInstructions(c *fiber.Ctx) error {
 	}
 
 	return c.JSON(recipe.ToDto())
+}
+
+// DELETE /recipe/:id/instruction/:instructionId
+func (h *RecipeHandler) deleteInstruction(c *fiber.Ctx) error {
+	id, err := strconv.Atoi(c.Params("id"))
+	if err != nil {
+		return SendError(c, BadRequest("id must be an integer"))
+	}
+
+	instructionId, err := strconv.Atoi(c.Params("instructionId"))
+	if err != nil {
+		return SendError(c, BadRequest("instructionId must be an integer"))
+	}
+
+	err = h.recipeService.DeleteInstruction(uint(id), uint(instructionId))
+	if err != nil {
+		return SendError(c, InternalServerError())
+	}
+
+	return c.SendStatus(fiber.StatusNoContent)
 }

@@ -38,16 +38,22 @@ func (e RecipeServiceError) Error() string {
 }
 
 type RecipeService interface {
+	// RECIPES
 	CreateRecipe(userID uint, name, description string) error
 	GetRecipeById(id uint) (*domain.Recipe, error)
 	UpdateRecipe(recipeID uint, name, description string) (*domain.Recipe, error)
 	DeleteRecipe(recipeID uint) error
+
+	// INGREDIENTS
 	AddIngredientToRecipe(recipeId uint, name, quantity, unit string) (*domain.Recipe, error)
 	UpdateIngredient(recipeID, ingredientID uint, name, qty, unit string) (*domain.Recipe, error)
 	DeleteIngredient(recipeID, ingredientID uint) error
+
+	// INSTRUCTIONS
 	AddInstructionToRecipe(recipeID uint, step int, contents string) (*domain.Recipe, error)
 	UpdateInstruction(recipeID, instructionID uint, contents string) (*domain.Recipe, error)
 	SwapInstructions(recipeID, instructionOneID, instructionTwoID uint) (*domain.Recipe, error)
+	DeleteInstruction(recipeID, instructionID uint) error
 }
 
 type recipeService struct {
@@ -104,6 +110,7 @@ func (r *recipeService) GetRecipeById(id uint) (*domain.Recipe, error) {
 	return getRecipeByIdWithTx(r.ctx, r.db, id)
 }
 
+// DeleteRecipe deletes the recipe with the given ID.
 func (r *recipeService) DeleteRecipe(recipeID uint) error {
 	ctx, cancel := context.WithTimeout(r.ctx, 5*time.Second)
 	defer cancel()
@@ -156,6 +163,7 @@ func (r *recipeService) DeleteRecipe(recipeID uint) error {
 
 // INGREDIENTS
 
+// AddIngredientToRecipe adds an ingredient to the recipe with the given ID.
 func (r *recipeService) AddIngredientToRecipe(recipeID uint, name, quantity, unit string) (*domain.Recipe, error) {
 	ctx, cancel := context.WithTimeout(r.ctx, 5*time.Second)
 	defer cancel()
@@ -234,6 +242,7 @@ func (r *recipeService) AddIngredientToRecipe(recipeID uint, name, quantity, uni
 	}
 }
 
+// UpdateRecipe updates the recipe with the given ID.
 func (r *recipeService) UpdateRecipe(recipeID uint, name, description string) (*domain.Recipe, error) {
 	ctx, cancel := context.WithTimeout(r.ctx, 5*time.Second)
 
@@ -303,6 +312,7 @@ func (r *recipeService) UpdateRecipe(recipeID uint, name, description string) (*
 	}
 }
 
+// UpdateIngredient updates the ingredient with the given ID.
 func (r *recipeService) UpdateIngredient(recipeID, ingredientID uint, name, qty, unit string) (*domain.Recipe, error) {
 	ctx, cancel := context.WithTimeout(r.ctx, 5*time.Second)
 	defer cancel()
@@ -420,6 +430,7 @@ func (r *recipeService) UpdateIngredient(recipeID, ingredientID uint, name, qty,
 	}
 }
 
+// DeleteIngredient deletes the ingredient with the given ID.
 func (r *recipeService) DeleteIngredient(recipeID, ingredientID uint) error {
 	ctx, cancel := context.WithTimeout(r.ctx, 5*time.Second)
 	errCh := make(chan error)
@@ -475,6 +486,7 @@ func (r *recipeService) DeleteIngredient(recipeID, ingredientID uint) error {
 
 // INSTRUCTIONS
 
+// AddInstructionToRecipe adds an instruction to the recipe with the given ID.
 func (r *recipeService) AddInstructionToRecipe(recipeID uint, step int, contents string) (*domain.Recipe, error) {
 	ctx, cancel := context.WithTimeout(r.ctx, 5*time.Second)
 	defer cancel()
@@ -547,6 +559,7 @@ func (r *recipeService) AddInstructionToRecipe(recipeID uint, step int, contents
 	}
 }
 
+// UpdateInstruction updates the instruction with the given ID.
 func (r *recipeService) UpdateInstruction(recipeID, instructionID uint, contents string) (*domain.Recipe, error) {
 	ctx, cancel := context.WithTimeout(r.ctx, 5*time.Second)
 	defer cancel()
@@ -647,6 +660,7 @@ func (r *recipeService) UpdateInstruction(recipeID, instructionID uint, contents
 	}
 }
 
+// SwapInstructions swaps the positions of two instructions.
 func (r *recipeService) SwapInstructions(recipeID, instructionOneID, instructionTwoID uint) (*domain.Recipe, error) {
 	ctx, cancel := context.WithTimeout(r.ctx, 5*time.Second)
 	defer cancel()
@@ -773,6 +787,61 @@ func (r *recipeService) SwapInstructions(recipeID, instructionOneID, instruction
 			return nil, NewRecipeServiceError(ErrUnknownRecipe, "timeout swapping instructions")
 		}
 		return nil, NewRecipeServiceError(ErrUnknownRecipe, "timeout cancelled without error")
+	}
+}
+
+// DeleteInstruction deletes the instruction with the given ID.
+func (r *recipeService) DeleteInstruction(recipeID, instructionID uint) error {
+	ctx, cancel := context.WithTimeout(r.ctx, 5*time.Second)
+	defer cancel()
+	errCh := make(chan error)
+
+	go func() {
+		defer cancel()
+		log.Println("deleting instruction", recipeID, instructionID)
+		tx := r.db.Begin()
+		defer recoverTx(tx)
+
+		var instruction domain.Instruction
+
+		err := tx.First(&instruction, instructionID).Error
+		if err != nil {
+			log.Println("error getting instruction", err)
+			tx.Rollback()
+			errCh <- NewRecipeServiceError(ErrInstructionNotFound, fmt.Sprintf("instruction %d not found", instructionID))
+			return
+		}
+		log.Println("got instruction", instruction)
+
+		if instruction.RecipeID != recipeID {
+			err := fmt.Sprintf("instruction %d does not belong to recipe %d", instructionID, recipeID)
+			log.Println(err)
+			tx.Rollback()
+			errCh <- NewRecipeServiceError(ErrInstructionConflict, err)
+			return
+		}
+
+		err = tx.Delete(&instruction).Error
+		if err != nil {
+			log.Println("error deleting instruction", err)
+			tx.Rollback()
+			errCh <- NewRecipeServiceError(ErrUnknownRecipe, fmt.Sprintf("error deleting instruction: %v", err))
+			return
+		}
+		tx.Commit()
+		log.Println("deleted instruction", instruction)
+	}()
+
+	select {
+	case err := <-errCh:
+		return err
+	case <-ctx.Done():
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			return NewRecipeServiceError(ErrUnknownRecipe, "timeout deleting instruction")
+		} else {
+			return nil
+		}
+
 	}
 }
 
