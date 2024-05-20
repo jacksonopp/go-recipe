@@ -11,8 +11,8 @@ type User struct {
 	Username string    `gorm:"unique;not null;uniqueIndex:idx_username"`
 	Password string    `gorm:"not null"`
 	Salt     string    `gorm:"not null"`
-	Sessions []Session `gorm:"foreignKey:UserID"`
-	Recipes  []Recipe  `gorm:"foreignKey:UserID"`
+	Sessions []Session `gorm:"foreignKey:UserID;constraint:OnUpdate:CASCADE,OnDelete:SET NULL"`
+	Recipes  []Recipe  `gorm:"foreignKey:UserID;constraint:OnUpdate:CASCADE,OnDelete:SET NULL"`
 }
 
 // UserDto is a DTO for a User.

@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"github.com/gofiber/fiber/v2"
+	"github.com/jacksonopp/go-recipe/domain"
 	"github.com/jacksonopp/go-recipe/services"
 	"gorm.io/gorm"
 )
@@ -35,6 +36,28 @@ func (h *UserHandler) getUserByName(c *fiber.Ctx) error {
 	return c.JSON(user.ToDto())
 }
 
+// GET /user/:name/recipes?page={n}&limit={n}
 func (h *UserHandler) getUserRecipes(c *fiber.Ctx) error {
-	return c.SendString("ok")
+	page, limit := getPaginationParams(c)
+	username := c.Params("name")
+	if username == "" {
+		return SendError(c, BadRequest("username is required"))
+	}
+
+	recipes, err := h.userService.GetUsersRecipes(username, page, limit)
+	if err != nil {
+		if v, ok := err.(services.UserServiceError); ok && v.Code == services.UserNotFound {
+			return SendError(c, NotFound(map[string]string{"msg": "user not found"}))
+		}
+		return SendError(c, InternalServerError())
+	}
+	recipesDtos := make([]domain.RecipeDto, len(recipes))
+	for i, r := range recipes {
+		rdto, ok := r.ToDto().(domain.RecipeDto)
+		if !ok {
+			return SendError(c, InternalServerError())
+		}
+		recipesDtos[i] = rdto
+	}
+	return c.JSON(recipesDtos)
 }
