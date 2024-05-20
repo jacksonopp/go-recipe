@@ -23,103 +23,29 @@ func NewRecipeHandler(r fiber.Router, db *gorm.DB) *RecipeHandler {
 }
 
 func (h *RecipeHandler) RegisterRoutes() {
+	// RECIPES
 	h.r.Post("/", AuthMiddleware(h.db), h.createRecipe)
 	h.r.Get("/:id", h.getRecipeById)
 	h.r.Patch("/:id", AuthMiddleware(h.db), h.updateRecipe)
+	h.r.Delete("/:id", AuthMiddleware(h.db), h.deleteRecipe)
+	// TODO delete recipe
+
+	// INGREDIENTS
 	h.r.Post("/:id/ingredient", AuthMiddleware(h.db), h.createIngredient)
 	h.r.Patch("/:id/ingredient/:ingredientId", AuthMiddleware(h.db), h.updateIngredient)
 	h.r.Delete("/:id/ingredient/:ingredientId", AuthMiddleware(h.db), h.deleteIngredient)
+	// TODO swap ingredient
+
+	// INSTRUCTIONS
 	h.r.Post("/:id/instruction", AuthMiddleware(h.db), h.createInstruction)
 	h.r.Patch("/:id/instruction/:instructionId", AuthMiddleware(h.db), h.updateInstruction)
 	h.r.Patch("/:id/instruction/:instructionOneId/:instructionTwoId", AuthMiddleware(h.db), h.swapInstructions)
+	//	TODO delete ingredient
 }
 
-// POST /recipe
-func (h *RecipeHandler) createInstruction(c *fiber.Ctx) error {
-	id, err := strconv.Atoi(c.Params("id"))
-	if err != nil {
-		return SendError(c, BadRequest("id must be an integer"))
-	}
+// RECIPES
 
-	instruction := struct {
-		Step     int    `json:"step"`
-		Contents string `json:"contents"`
-	}{}
-
-	if err := c.BodyParser(&instruction); err != nil {
-		err := UnprocessableEntity(map[string]string{"error": "invalid request body"})
-		return SendError(c, err)
-	}
-
-	if instruction.Contents == "" {
-		err := UnprocessableEntity(map[string]string{"contents": "contents is required"})
-		return SendError(c, err)
-	}
-
-	recipe, err := h.recipeService.AddInstructionToRecipe(uint(id), instruction.Step, instruction.Contents)
-	if err != nil {
-		log.Println("error creating instruction", err)
-		return SendError(c, InternalServerError())
-	}
-
-	return c.JSON(recipe.ToDto())
-}
-
-// GET /recipe/:id
-func (h *RecipeHandler) getRecipeById(c *fiber.Ctx) error {
-	id := c.Params("id")
-	if id == "" {
-		return SendError(c, BadRequest("id is required"))
-	}
-
-	recipeId, err := strconv.Atoi(id)
-	if err != nil {
-		return SendError(c, BadRequest("id must be an integer"))
-	}
-
-	recipe, err := h.recipeService.GetRecipeById(uint(recipeId))
-	if err != nil {
-		return SendError(c, NotFound(map[string]string{"error": "recipe not found"}))
-	}
-
-	return c.JSON(recipe.ToDto())
-
-	//recipe, err := h.recipeService.GetRecipeById(id)
-	//if err
-}
-
-func (h *RecipeHandler) updateRecipe(c *fiber.Ctx) error {
-	id, err := strconv.Atoi(c.Params("id"))
-	if err != nil {
-		return SendError(c, BadRequest("id must be an integer"))
-	}
-
-	r := struct {
-		Name        string `json:"name"`
-		Description string `json:"description"`
-	}{}
-
-	if err := c.BodyParser(&r); err != nil {
-		err := UnprocessableEntity(map[string]string{"error": "invalid request body"})
-		return SendError(c, err)
-	}
-
-	if r.Name == "" && r.Description == "" {
-		err := UnprocessableEntity(map[string]string{"error": "name or description is required"})
-		return SendError(c, err)
-	}
-
-	recipe, err := h.recipeService.UpdateRecipe(uint(id), r.Name, r.Description)
-	if err != nil {
-		log.Println("error updating recipe", err)
-		//TODO handle not found error
-		return SendError(c, InternalServerError())
-	}
-
-	return c.JSON(recipe.ToDto())
-}
-
-// POST /recipe/:id/ingredient
+// POST /recipe/
 func (h *RecipeHandler) createRecipe(c *fiber.Ctx) error {
 	var user domain.User
 	if u, ok := c.Locals("user").(*domain.User); !ok {
@@ -157,6 +83,113 @@ func (h *RecipeHandler) createRecipe(c *fiber.Ctx) error {
 
 	c.Status(fiber.StatusCreated)
 	return nil
+}
+
+// GET /recipe/:id
+func (h *RecipeHandler) getRecipeById(c *fiber.Ctx) error {
+	id := c.Params("id")
+	if id == "" {
+		return SendError(c, BadRequest("id is required"))
+	}
+
+	recipeId, err := strconv.Atoi(id)
+	if err != nil {
+		return SendError(c, BadRequest("id must be an integer"))
+	}
+
+	recipe, err := h.recipeService.GetRecipeById(uint(recipeId))
+	if err != nil {
+		return SendError(c, NotFound(map[string]string{"error": "recipe not found"}))
+	}
+
+	return c.JSON(recipe.ToDto())
+
+	//recipe, err := h.recipeService.GetRecipeById(id)
+	//if err
+}
+
+// PATCH /recipe/:id
+func (h *RecipeHandler) updateRecipe(c *fiber.Ctx) error {
+	id, err := strconv.Atoi(c.Params("id"))
+	if err != nil {
+		return SendError(c, BadRequest("id must be an integer"))
+	}
+
+	r := struct {
+		Name        string `json:"name"`
+		Description string `json:"description"`
+	}{}
+
+	if err := c.BodyParser(&r); err != nil {
+		err := UnprocessableEntity(map[string]string{"error": "invalid request body"})
+		return SendError(c, err)
+	}
+
+	if r.Name == "" && r.Description == "" {
+		err := UnprocessableEntity(map[string]string{"error": "name or description is required"})
+		return SendError(c, err)
+	}
+
+	recipe, err := h.recipeService.UpdateRecipe(uint(id), r.Name, r.Description)
+	if err != nil {
+		log.Println("error updating recipe", err)
+		//TODO handle not found error
+		return SendError(c, InternalServerError())
+	}
+
+	return c.JSON(recipe.ToDto())
+}
+
+// DELETE /recipe/:id
+func (h *RecipeHandler) deleteRecipe(c *fiber.Ctx) error {
+	id, err := strconv.Atoi(c.Params("id"))
+	if err != nil {
+		return SendError(c, BadRequest("id must be an integer"))
+	}
+
+	err = h.recipeService.DeleteRecipe(uint(id))
+	if err != nil {
+		return SendError(c, InternalServerError())
+	}
+
+	return c.SendStatus(fiber.StatusNoContent)
+}
+
+// INGREDIENTS
+
+// POST /recipe/:id/ingredient
+func (h *RecipeHandler) createIngredient(c *fiber.Ctx) error {
+	id, err := strconv.Atoi(c.Params("id"))
+	if err != nil {
+		return SendError(c, BadRequest("id must be an integer"))
+	}
+
+	ingredient := struct {
+		Name     string `json:"name"`
+		Quantity string `json:"quantity"`
+		Unit     string `json:"unit"`
+	}{}
+
+	if err := c.BodyParser(&ingredient); err != nil {
+		err := UnprocessableEntity(map[string]string{"error": "invalid request body"})
+		return SendError(c, err)
+	}
+
+	if ingredient.Name == "" {
+		err := UnprocessableEntity(map[string]string{"name": "name is required"})
+		return SendError(c, err)
+	}
+
+	recipe, err := h.recipeService.AddIngredientToRecipe(uint(id), ingredient.Name, ingredient.Quantity, ingredient.Unit)
+	if err != nil {
+		if err.(services.RecipeServiceError).Code == services.ErrRecipeNotFound {
+			return SendError(c, NotFound(map[string]string{"error": "recipe not found"}))
+		}
+		log.Println("error creating ingredient", err)
+		return SendError(c, InternalServerError())
+	}
+
+	return c.JSON(recipe.ToDto())
 }
 
 // PATCH /recipe/:id/ingredient/:ingredientId
@@ -232,35 +265,33 @@ func (h *RecipeHandler) deleteIngredient(c *fiber.Ctx) error {
 	return c.SendStatus(fiber.StatusNoContent)
 }
 
-// POST /recipe/:id/ingredient
-func (h *RecipeHandler) createIngredient(c *fiber.Ctx) error {
+// INSTRUCTIONS
+
+// POST /recipe
+func (h *RecipeHandler) createInstruction(c *fiber.Ctx) error {
 	id, err := strconv.Atoi(c.Params("id"))
 	if err != nil {
 		return SendError(c, BadRequest("id must be an integer"))
 	}
 
-	ingredient := struct {
-		Name     string `json:"name"`
-		Quantity string `json:"quantity"`
-		Unit     string `json:"unit"`
+	instruction := struct {
+		Step     int    `json:"step"`
+		Contents string `json:"contents"`
 	}{}
 
-	if err := c.BodyParser(&ingredient); err != nil {
+	if err := c.BodyParser(&instruction); err != nil {
 		err := UnprocessableEntity(map[string]string{"error": "invalid request body"})
 		return SendError(c, err)
 	}
 
-	if ingredient.Name == "" {
-		err := UnprocessableEntity(map[string]string{"name": "name is required"})
+	if instruction.Contents == "" {
+		err := UnprocessableEntity(map[string]string{"contents": "contents is required"})
 		return SendError(c, err)
 	}
 
-	recipe, err := h.recipeService.AddIngredientToRecipe(uint(id), ingredient.Name, ingredient.Quantity, ingredient.Unit)
+	recipe, err := h.recipeService.AddInstructionToRecipe(uint(id), instruction.Step, instruction.Contents)
 	if err != nil {
-		if err.(services.RecipeServiceError).Code == services.ErrRecipeNotFound {
-			return SendError(c, NotFound(map[string]string{"error": "recipe not found"}))
-		}
-		log.Println("error creating ingredient", err)
+		log.Println("error creating instruction", err)
 		return SendError(c, InternalServerError())
 	}
 
