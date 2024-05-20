@@ -9,27 +9,27 @@ import (
 	"log"
 )
 
-type UserHandler struct {
+type AuthHandler struct {
 	r              fiber.Router
-	userService    services.UserService
+	authService    services.AuthService
 	sessionService services.SessionService
 }
 
-func NewUserHandler(r fiber.Router, db *gorm.DB) *UserHandler {
-	userService := services.NewUserService(db)
+func NewAuthHandler(r fiber.Router, db *gorm.DB) *AuthHandler {
+	authService := services.NewAuthService(db)
 	sessionService := services.NewSessionService(db)
 
 	subpath := r.Group("/user")
 
-	return &UserHandler{r: subpath, userService: userService, sessionService: sessionService}
+	return &AuthHandler{r: subpath, authService: authService, sessionService: sessionService}
 }
 
-func (h *UserHandler) RegisterRoutes() {
+func (h *AuthHandler) RegisterRoutes() {
 	h.r.Post("/register", h.register)
 	h.r.Post("/login", h.login)
 }
 
-func (h *UserHandler) register(c *fiber.Ctx) error {
+func (h *AuthHandler) register(c *fiber.Ctx) error {
 	user := struct {
 		Username        string `json:"username"`
 		Password        string `json:"password"`
@@ -63,8 +63,8 @@ func (h *UserHandler) register(c *fiber.Ctx) error {
 		Password: user.Password,
 	}
 
-	if err := h.userService.CreateUser(u); err != nil {
-		var e services.UserServiceError
+	if err := h.authService.CreateUser(u); err != nil {
+		var e services.AuthServiceError
 		if errors.As(err, &e) {
 			if e.Code == services.ErrUserAlreadyExists {
 				err := Conflict(map[string]string{"username": e.Msg})
@@ -80,7 +80,7 @@ func (h *UserHandler) register(c *fiber.Ctx) error {
 	return nil
 }
 
-func (h *UserHandler) login(c *fiber.Ctx) error {
+func (h *AuthHandler) login(c *fiber.Ctx) error {
 	user := struct {
 		Username string `json:"username"`
 		Password string `json:"password"`
@@ -101,7 +101,7 @@ func (h *UserHandler) login(c *fiber.Ctx) error {
 		return SendError(c, err)
 	}
 
-	u, err := h.userService.LoginUser(user.Username, user.Password)
+	u, err := h.authService.LoginUser(user.Username, user.Password)
 	if err != nil {
 		log.Println("error logging in user: ", err)
 		err := NotFound(map[string]string{"error": "user not found"})

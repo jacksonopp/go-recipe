@@ -8,46 +8,46 @@ import (
 	"log"
 )
 
-type UserServiceErrorCode int
+type AuthServiceErrorCode int
 
 const (
-	ErrUnknown UserServiceErrorCode = iota
+	ErrUnknown AuthServiceErrorCode = iota
 	ErrUserAlreadyExists
 	ErrUserNotFound
 	ErrPasswordMismatch
 )
 
-type UserServiceError struct {
-	Code UserServiceErrorCode
+type AuthServiceError struct {
+	Code AuthServiceErrorCode
 	Msg  string
 }
 
-func NewUserServiceError(code UserServiceErrorCode, msg string) UserServiceError {
-	return UserServiceError{
+func NewAuthServiceError(code AuthServiceErrorCode, msg string) AuthServiceError {
+	return AuthServiceError{
 		Code: code,
 		Msg:  msg,
 	}
 }
 
-func (e UserServiceError) Error() string {
+func (e AuthServiceError) Error() string {
 	return fmt.Sprintf("user service error: %v", e.Msg)
 }
 
-type userService struct {
+type authService struct {
 	db *gorm.DB
 }
 
-type UserService interface {
+type AuthService interface {
 	CreateUser(user domain.User) error
 	GetUserByName(name string) (*domain.User, error)
 	LoginUser(name, password string) (*domain.User, error)
 }
 
-func NewUserService(db *gorm.DB) UserService {
-	return &userService{db: db}
+func NewAuthService(db *gorm.DB) AuthService {
+	return &authService{db: db}
 }
 
-func (s *userService) CreateUser(user domain.User) error {
+func (s *authService) CreateUser(user domain.User) error {
 	salt, err := genRandStr(32)
 	if err != nil {
 		return err
@@ -65,28 +65,28 @@ func (s *userService) CreateUser(user domain.User) error {
 
 	if result.Error != nil {
 		if errors.Is(result.Error, gorm.ErrDuplicatedKey) {
-			return NewUserServiceError(ErrUserAlreadyExists, "user already exists")
+			return NewAuthServiceError(ErrUserAlreadyExists, "user already exists")
 		}
-		return NewUserServiceError(ErrUnknown, "unknown error")
+		return NewAuthServiceError(ErrUnknown, "unknown error")
 	}
 
 	return result.Error
 }
 
-func (s *userService) GetUserByName(name string) (*domain.User, error) {
+func (s *authService) GetUserByName(name string) (*domain.User, error) {
 	var user domain.User
 	tx := s.db.Where("username = ?", name).First(&user)
 	if tx.Error != nil {
 		if errors.Is(tx.Error, gorm.ErrRecordNotFound) {
-			return nil, NewUserServiceError(ErrUserNotFound, "user not found")
+			return nil, NewAuthServiceError(ErrUserNotFound, "user not found")
 		}
 		log.Println("error getting user by name", tx.Error)
-		return nil, NewUserServiceError(ErrUnknown, "unknown error")
+		return nil, NewAuthServiceError(ErrUnknown, "unknown error")
 	}
 	return &user, nil
 }
 
-func (s *userService) LoginUser(name, password string) (*domain.User, error) {
+func (s *authService) LoginUser(name, password string) (*domain.User, error) {
 	user, err := s.GetUserByName(name)
 	if err != nil {
 		log.Println("error getting user by name", err)
@@ -96,7 +96,7 @@ func (s *userService) LoginUser(name, password string) (*domain.User, error) {
 	ok := checkPasswordHash(password, user.Salt, user.Password)
 	if !ok {
 		log.Println("password mismatch")
-		return nil, NewUserServiceError(ErrPasswordMismatch, "passwords do not match")
+		return nil, NewAuthServiceError(ErrPasswordMismatch, "passwords do not match")
 	}
 
 	user.Salt = ""

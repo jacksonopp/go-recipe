@@ -24,7 +24,7 @@ func main() {
 	app.Use(logger.New())
 	api := app.Group("/api")
 
-	userHandler := handlers.NewUserHandler(api, db)
+	userHandler := handlers.NewAuthHandler(api, db)
 	recipeHandler := handlers.NewRecipeHandler(api, db)
 	createApiRoutes(userHandler, recipeHandler)
 

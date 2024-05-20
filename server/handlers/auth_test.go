@@ -23,7 +23,7 @@ func (s *mockUserService) LoginUser(_name, _password string) (*domain.User, erro
 
 func TestUserHandler_register(t *testing.T) {
 	app := fiber.New()
-	h := UserHandler{userService: &mockUserService{}, r: app}
+	h := AuthHandler{authService: &mockUserService{}, r: app}
 	c := app.AcquireCtx(&fasthttp.RequestCtx{})
 
 	tests := []struct {
@@ -82,7 +82,7 @@ func TestUserHandler_register(t *testing.T) {
 
 func TestUserHandler_login(t *testing.T) {
 	app := fiber.New()
-	h := UserHandler{userService: &mockUserService{}, r: app}
+	h := AuthHandler{authService: &mockUserService{}, r: app}
 	c := app.AcquireCtx(&fasthttp.RequestCtx{})
 
 	tests := []struct {

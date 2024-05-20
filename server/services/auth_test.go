@@ -7,8 +7,8 @@ package services
 //	"testing"
 //)
 //
-//func createUserService(db *gorm.DB) UserService {
-//	return &userService{db: db}
+//func createUserService(db *gorm.DB) AuthService {
+//	return &authService{db: db}
 //}
 //
 //func TestUserService_CreateUser(t *testing.T) {
