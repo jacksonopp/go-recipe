@@ -1,4 +1,9 @@
 <script setup lang="ts">
+definePageMeta({
+  layout: "unauthenticated",
+  middleware: ["before-login"],
+});
+
 import { FetchError } from "ofetch";
 
 const router = useRouter();
@@ -79,10 +84,12 @@ const submitForm = async () => {
     <div class="container mx-auto px-4 md:px-6 lg:px-8">
       <div class="mx-auto max-w-sm sm:max-w-2xl">
         <div class="flex flex-col justify-center space-y-6">
-          <h1 class="text-4xl font-bold text-white md:text-5xl lg:text-6xl">
+          <h1
+            class="text-4xl font-header font-semibold text-white md:text-5xl lg:text-6xl"
+          >
             Join our Recipe Community
           </h1>
-          <p class="text-lg text-gray-200 md:text-xl lg:text-2xl">
+          <p class="text-lg font-header text-gray-200 md:text-xl lg:text-2xl">
             Connect with home cooks, share your favorite recipes, and discover
             new dishes to try.
           </p>

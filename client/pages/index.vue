@@ -1,4 +1,9 @@
 <script setup lang="ts">
+definePageMeta({
+  layout: "unauthenticated",
+  middleware: ["before-login"],
+});
+
 import HomepageHero from "~/components/homepage/HomepageHero.vue";
 import HomepageTrendingRecipes from "~/components/homepage/HomepageTrendingRecipes.vue";
 import HomepageFooter from "~/components/homepage/HomepageFooter.vue";

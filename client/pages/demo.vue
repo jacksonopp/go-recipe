@@ -8,7 +8,7 @@ definePageMeta({
 
 <template>
   <div>
-    <h1>demo</h1>
+    <h1 class="font-header">Whereas recognition of the inherent dignity</h1>
   </div>
 </template>
 

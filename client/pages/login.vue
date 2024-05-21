@@ -1,4 +1,9 @@
 <script setup lang="ts">
+definePageMeta({
+  layout: "unauthenticated",
+  middleware: ["before-login"],
+});
+
 import { FetchError } from "ofetch";
 
 const fd = {

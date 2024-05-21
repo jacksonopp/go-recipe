@@ -129,13 +129,6 @@ func (h *AuthHandler) session(c *fiber.Ctx) error {
 	}
 
 	err := h.sessionService.CheckSession(session)
-	go func() {
-		log.Println("pruning sessions")
-		err := h.sessionService.PruneSessions()
-		if err != nil {
-			log.Printf("error pruning sessions: %v", err)
-		}
-	}()
 	if err != nil {
 		log.Println("error getting user by session: ", err)
 		err := Unauthorized()

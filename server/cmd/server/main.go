@@ -32,12 +32,13 @@ func main() {
 
 	sessionService := services.NewSessionService(db)
 
-	done, err := sessionService.PruneOnSchedule(time.Hour * 24)
-	if err != nil {
-		// ? is this the best use for the ch done?
-		done <- true
-		log.Printf("ERROR: failed to prune session %v", err)
-	}
+	go func() {
+		done, err := sessionService.PruneOnSchedule(time.Minute * 10)
+		if err != nil {
+			log.Printf("ERROR: failed to prune session %v", err)
+			done <- true
+		}
+	}()
 
 	app.Get("/", func(c *fiber.Ctx) error {
 		log.Println("request to /")
