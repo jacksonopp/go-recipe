@@ -11,11 +11,10 @@ export default {
   theme: {
     extend: {
       height: {
-        "nav": "86px",
-        "screen-nav": "calc(100vh - 86px)"
-      }
+        nav: "86px",
+        "screen-nav": "calc(100vh - 86px)",
+      },
     },
   },
   plugins: [],
-}
-
+};

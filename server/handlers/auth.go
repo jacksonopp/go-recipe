@@ -27,6 +27,7 @@ func NewAuthHandler(r fiber.Router, db *gorm.DB) *AuthHandler {
 func (h *AuthHandler) RegisterRoutes() {
 	h.r.Post("/register", h.register)
 	h.r.Post("/login", h.login)
+	h.r.Get("/session", h.session)
 }
 
 func (h *AuthHandler) register(c *fiber.Ctx) error {
@@ -75,9 +76,7 @@ func (h *AuthHandler) register(c *fiber.Ctx) error {
 		log.Printf("error creating user: %v", err)
 		return InternalServerError()
 	}
-	c.Status(201)
-
-	return nil
+	return c.Redirect("/login", fiber.StatusPermanentRedirect)
 }
 
 func (h *AuthHandler) login(c *fiber.Ctx) error {
@@ -120,4 +119,28 @@ func (h *AuthHandler) login(c *fiber.Ctx) error {
 	})
 
 	return c.JSON(u.ToDto())
+}
+
+func (h *AuthHandler) session(c *fiber.Ctx) error {
+	session := c.Cookies("session")
+	if session == "" {
+		err := Unauthorized()
+		return SendError(c, err)
+	}
+
+	err := h.sessionService.CheckSession(session)
+	go func() {
+		log.Println("pruning sessions")
+		err := h.sessionService.PruneSessions()
+		if err != nil {
+			log.Printf("error pruning sessions: %v", err)
+		}
+	}()
+	if err != nil {
+		log.Println("error getting user by session: ", err)
+		err := Unauthorized()
+		return SendError(c, err)
+	}
+
+	return c.SendStatus(fiber.StatusOK)
 }

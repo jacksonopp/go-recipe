@@ -1,5 +1,4 @@
 <script setup lang="ts">
-
 import MainNavigation from "~/components/navigation/MainNavigation.vue";
 </script>
 
@@ -8,6 +7,4 @@ import MainNavigation from "~/components/navigation/MainNavigation.vue";
   <slot />
 </template>
 
-<style scoped>
-
-</style>
+<style scoped></style>

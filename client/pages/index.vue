@@ -10,6 +10,4 @@ import HomepageFooter from "~/components/homepage/HomepageFooter.vue";
   <HomepageFooter />
 </template>
 
-<style scoped>
-
-</style>
+<style scoped></style>
