@@ -162,6 +162,12 @@ const submitForm = async () => {
             >
               Join Now
             </button>
+            <p class="mt-4 text-white">
+              Already have an account?
+              <NuxtLink to="/login" class="font-semibold hover:underline"
+                >Log in now!
+              </NuxtLink>
+            </p>
           </form>
         </div>
       </div>

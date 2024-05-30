@@ -1,14 +1,14 @@
 <script setup lang="ts">
+useHead({
+  title: "Create a new recipe",
+});
+
 definePageMeta({
   layout: "authenticated",
   middleware: ["auth"],
 });
 </script>
 
-<template>
-  <p>hi</p>
-  <NuxtLink to="/join">Join</NuxtLink>
-  <NuxtLink to="/login">Login</NuxtLink>
-</template>
+<template>Create</template>
 
 <style scoped></style>

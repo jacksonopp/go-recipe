@@ -2,10 +2,15 @@ export default defineNuxtRouteMiddleware(async (to, from) => {
   if (import.meta.server) return;
   if (useNuxtApp().isHydrating) return;
   const router = useRouter();
-  try {
-    await $fetch.raw("/api/auth/session");
+  const { isLoggedIn, checkSession } = useAuth({ checkInitial: false });
+
+  if (isLoggedIn.value) {
     return router.push({ path: "/home" });
-  } catch (e) {
+  } else {
+    const isSessionValid = await checkSession();
+    if (isSessionValid) {
+      return router.push({ path: "/home" });
+    }
     return;
   }
 });

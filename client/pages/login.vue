@@ -1,10 +1,12 @@
 <script setup lang="ts">
+import { FetchError } from "ofetch";
+
 definePageMeta({
   layout: "unauthenticated",
   middleware: ["before-login"],
 });
 
-import { FetchError } from "ofetch";
+const router = useRouter();
 
 const fd = {
   username: { value: "", dirty: false },
@@ -17,26 +19,22 @@ const formData = reactive(fd);
 
 const serverErrorMessage = ref("");
 
-const submitForm = async () => {
-  try {
-    await $fetch("/api/auth/login", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        username: formData.username.value,
-        password: formData.password.value,
-      }),
-    });
-  } catch (e) {
-    const error = e as FetchError;
-    switch (error.data.code) {
-      default:
-        serverErrorMessage.value = "something went wrong";
-        break;
-    }
+const { login, onError, onLogin } = useAuth();
+
+onError((error: FetchError) => {
+  switch (error.data.code) {
+    default:
+      serverErrorMessage.value = "something went wrong";
+      break;
   }
+});
+
+onLogin(() => {
+  router.push("/home");
+});
+
+const submitForm = () => {
+  login(formData.username.value, formData.password.value);
 };
 </script>
 
@@ -92,6 +90,12 @@ const submitForm = async () => {
             >
               Log In
             </button>
+            <p class="mt-4 text-white">
+              Don't have an account?
+              <NuxtLink to="/join" class="font-semibold hover:underline"
+                >Sign up now!
+              </NuxtLink>
+            </p>
           </form>
         </div>
       </div>
