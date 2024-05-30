@@ -25,7 +25,7 @@ const toggleDialog = () => {
           type="text"
         />
         <button
-          class="absolute top-1/2 right-0 -translate-y-1/2 rounded-r-full bg-orange-500 px-4 py-2 text-lg font-medium text-white transition-colors hover:bg-orange-600 focus:outline-none focus:ring-2 focus:ring-orange-600 focus:ring-offset-2"
+          class="absolute top-1/2 right-0 -translate-y-1/2 rounded-r-full bg-orange-500 px-4 py-2 text-lg font-semibold text-white transition-colors hover:bg-orange-600 focus:outline-none focus:ring-2 focus:ring-orange-600 focus:ring-offset-2"
         >
           Search
         </button>

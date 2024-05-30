@@ -10,9 +10,9 @@ type Recipe struct {
 	gorm.Model
 	Name        string `gorm:"not null"`
 	Description string
-	Ingredients []Ingredient `gorm:"foreignKey:RecipeID"`
 	// UserID is the ID of the user who created the recipe.
 	UserID       uint          `json:"user_id"`
+	Ingredients  []Ingredient  `gorm:"foreignKey:RecipeID"`
 	Instructions []Instruction `gorm:"foreignKey:RecipeID"`
 }
 

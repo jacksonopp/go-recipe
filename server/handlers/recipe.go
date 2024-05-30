@@ -53,9 +53,11 @@ func (h *RecipeHandler) createRecipe(c *fiber.Ctx) error {
 	}
 
 	recipe := struct {
-		Name        string `json:"name"`
-		Description string `json:"description"`
-		UserID      uint   `json:"user_id"`
+		Name         string                  `json:"name"`
+		Description  string                  `json:"description"`
+		Ingredients  []domain.IngredientDto  `json:"ingredients"`
+		Instructions []domain.InstructionDto `json:"instructions"`
+		UserID       uint                    `json:"user_id"` // <- this is populated by the middleware
 	}{}
 
 	if err := c.BodyParser(&recipe); err != nil {
@@ -72,14 +74,13 @@ func (h *RecipeHandler) createRecipe(c *fiber.Ctx) error {
 
 	recipe.UserID = user.ID
 
-	err = h.recipeService.CreateRecipe(recipe.UserID, recipe.Name, recipe.Description)
+	r, err := h.recipeService.CreateRecipe(recipe.UserID, recipe.Name, recipe.Description, recipe.Ingredients, recipe.Instructions)
 	if err != nil {
 		log.Println("error creating recipe", err)
 		return SendError(c, InternalServerError())
 	}
 
-	c.Status(fiber.StatusCreated)
-	return nil
+	return c.JSON(r.ToDto())
 }
 
 // GET /recipe/:id

@@ -39,7 +39,7 @@ func (e RecipeServiceError) Error() string {
 
 type RecipeService interface {
 	// RECIPES
-	CreateRecipe(userID uint, name, description string) error
+	CreateRecipe(userID uint, name, description string, ingredients []domain.IngredientDto, instructions []domain.InstructionDto) (*domain.Recipe, error)
 	GetRecipeById(id uint) (*domain.Recipe, error)
 	UpdateRecipe(recipeID uint, name, description string) (*domain.Recipe, error)
 	DeleteRecipe(recipeID uint) error
@@ -74,34 +74,95 @@ type recipeVal struct {
 // RECIPES
 
 // CreateRecipe creates a new recipe with the given name and description.
-func (r *recipeService) CreateRecipe(userID uint, name, description string) error {
+func (r *recipeService) CreateRecipe(userID uint, name, description string, ingredients []domain.IngredientDto, instructions []domain.InstructionDto) (*domain.Recipe, error) {
 	ctx, cancel := context.WithTimeout(r.ctx, 5*time.Second)
 	defer cancel()
-	errCh := make(chan error)
+	ch := make(chan recipeVal)
 
 	go func() {
 		defer cancel()
 		log.Println("creating recipe", name, description, userID)
-		err := r.db.Create(&domain.Recipe{
+		tx := r.db.Begin()
+		defer recoverTx(tx)
+
+		recipe := &domain.Recipe{
 			Name:        name,
 			Description: description,
 			UserID:      userID,
-		}).Error
+		}
+
+		err := tx.Create(recipe).Error
 		if err != nil {
 			err := fmt.Sprintf("error creating recipe: %v", err)
 			log.Println(err)
-			errCh <- NewRecipeServiceError(ErrUnknownRecipe, err)
+			ch <- recipeVal{
+				nil,
+				NewRecipeServiceError(ErrUnknownRecipe, err),
+			}
+			return
 		}
+
+		ings := make([]domain.Ingredient, len(ingredients))
+		for i, ingredient := range ingredients {
+			ings[i] = domain.Ingredient{
+				Name:     ingredient.Name,
+				Quantity: ingredient.Quantity,
+				Unit:     ingredient.Unit,
+				RecipeID: recipe.ID,
+			}
+		}
+		err = tx.Create(&ings).Error
+		if err != nil {
+			err := fmt.Sprintf("error creating ingredients: %v", err)
+			log.Println(err)
+			ch <- recipeVal{
+				nil,
+				NewRecipeServiceError(ErrUnknownRecipe, err),
+			}
+			return
+		}
+
+		insts := make([]domain.Instruction, len(instructions))
+		for i, instruction := range instructions {
+			insts[i] = domain.Instruction{
+				Step:     instruction.Step,
+				Contents: instruction.Contents,
+				RecipeID: recipe.ID,
+			}
+		}
+		err = tx.Create(&insts).Error
+		if err != nil {
+			err := fmt.Sprintf("error creating instructions: %v", err)
+			log.Println(err)
+			ch <- recipeVal{
+				nil,
+				NewRecipeServiceError(ErrUnknownRecipe, err),
+			}
+			return
+		}
+
+		err = tx.Commit().Error
+		if err != nil {
+			err := fmt.Sprintf("error committing transaction: %v", err)
+			log.Println(err)
+			ch <- recipeVal{
+				nil,
+				NewRecipeServiceError(ErrUnknownRecipe, err),
+			}
+			return
+		}
+
+		ch <- recipeVal{recipe, nil}
 	}()
 
 	select {
-	case err := <-errCh:
-		return err
+	case v := <-ch:
+		return v.recipe, v.err
 	case <-ctx.Done():
 		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-			return NewRecipeServiceError(ErrUnknownRecipe, "timeout creating recipe")
+			return nil, NewRecipeServiceError(ErrUnknownRecipe, "timeout creating recipe")
 		}
-		return nil
+		return nil, NewRecipeServiceError(ErrUnknownRecipe, "timeout cancelled without error")
 	}
 }
 
