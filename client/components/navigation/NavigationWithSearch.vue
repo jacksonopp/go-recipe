@@ -13,7 +13,7 @@ const toggleDialog = () => {
 </script>
 
 <template>
-  <NavigationBase left-full>
+  <NavigationBase left-full logo-url="/home">
     <template v-slot:left>
       <Link to="/home">Home</Link>
       <Link to="/explore">Explore</Link>

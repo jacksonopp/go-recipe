@@ -1,18 +1,28 @@
 import { FetchError } from "ofetch";
 
 type UseAuthOpts = {
-  checkInitial?: boolean;
+  autoLogin?: boolean;
+  logoutUrl?: string;
+  onLogin?: () => Promise<void>;
+  onError?: (error: FetchError) => void;
 };
 
-export const useAuth = (opts: UseAuthOpts = { checkInitial: true }) => {
+export const useAuth = (
+  opts: UseAuthOpts = {
+    autoLogin: true,
+    logoutUrl: "/login",
+  },
+) => {
   const error = ref<FetchError | null>(null);
   const isLoggedIn = useState("isLoggedIn", () => false);
+  const router = useRouter();
 
-  if (opts.checkInitial) {
-    console.log("checking initial");
+  if (opts.autoLogin) {
+    console.log("auto login");
     $fetch("/api/auth/session")
       .then(() => {
         isLoggedIn.value = true;
+        opts.onLogin?.();
       })
       .catch(() => {
         isLoggedIn.value = false;
@@ -28,22 +38,22 @@ export const useAuth = (opts: UseAuthOpts = { checkInitial: true }) => {
         headers: { "Content-Type": "application/json" },
       });
       isLoggedIn.value = true;
+      await opts.onLogin?.();
     } catch (e) {
       error.value = e as FetchError;
+      opts.onError?.(e as FetchError);
     }
   };
 
-  const logout = () => {
-    // logout logic
-    console.log("logging out");
-  };
-
-  const onLogin = (callback: () => void) => {
-    watch(isLoggedIn, (newLoggedIn) => {
-      if (newLoggedIn) {
-        callback();
-      }
-    });
+  const logout = async () => {
+    //   logout logic
+    try {
+      await $fetch("/api/auth/logout");
+      isLoggedIn.value = false;
+    } catch (e) {
+      error.value = e as FetchError;
+    }
+    await router.push({ path: opts.logoutUrl });
   };
 
   const checkSession = async () => {
@@ -57,20 +67,10 @@ export const useAuth = (opts: UseAuthOpts = { checkInitial: true }) => {
     }
   };
 
-  const onError = (callback: (error: FetchError) => void) => {
-    watch(error, (newError) => {
-      if (newError !== null) {
-        callback(newError);
-      }
-    });
-  };
-
   return {
     login,
     logout,
     error,
-    onError,
-    onLogin,
     isLoggedIn,
     checkSession,
   };

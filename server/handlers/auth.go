@@ -28,6 +28,7 @@ func (h *AuthHandler) RegisterRoutes() {
 	h.r.Post("/register", h.register)
 	h.r.Post("/login", h.login)
 	h.r.Get("/session", h.session)
+	h.r.Get("/logout", h.logout)
 }
 
 func (h *AuthHandler) register(c *fiber.Ctx) error {
@@ -136,4 +137,22 @@ func (h *AuthHandler) session(c *fiber.Ctx) error {
 	}
 
 	return c.SendStatus(fiber.StatusOK)
+}
+
+func (h *AuthHandler) logout(c *fiber.Ctx) error {
+	session := c.Cookies("session")
+	status := fiber.StatusNoContent
+	if session == "" {
+		status = fiber.StatusUnauthorized
+	}
+
+	err := h.sessionService.DeleteSessionByToken(session)
+	if err != nil {
+		log.Println("error deleting session: ", err)
+		status = fiber.StatusInternalServerError
+	}
+
+	c.ClearCookie("session")
+
+	return c.SendStatus(status)
 }

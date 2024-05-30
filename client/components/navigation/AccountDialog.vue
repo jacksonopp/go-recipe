@@ -36,7 +36,7 @@ onMounted(() => {
   });
 });
 
-const { logout } = useAuth({ checkInitial: false });
+const { logout } = useAuth({ autoLogin: false });
 </script>
 
 <template>

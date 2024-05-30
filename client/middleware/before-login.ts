@@ -2,7 +2,7 @@ export default defineNuxtRouteMiddleware(async (to, from) => {
   if (import.meta.server) return;
   if (useNuxtApp().isHydrating) return;
   const router = useRouter();
-  const { isLoggedIn, checkSession } = useAuth({ checkInitial: false });
+  const { isLoggedIn, checkSession } = useAuth({ autoLogin: false });
 
   if (isLoggedIn.value) {
     return router.push({ path: "/home" });

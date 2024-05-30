@@ -4,6 +4,10 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  logoUrl: {
+    type: String,
+    default: "/",
+  },
 });
 </script>
 
@@ -12,7 +16,7 @@ const props = defineProps({
     <div class="flex items-center py-4 md:mx-6 md:py-5">
       <div>
         <NuxtLink
-          to="/"
+          :to="props.logoUrl"
           class="text-2xl font-semibold text-orange-500 font-header"
         >
           Yumfeed

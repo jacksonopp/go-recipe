@@ -19,18 +19,18 @@ const formData = reactive(fd);
 
 const serverErrorMessage = ref("");
 
-const { login, onError, onLogin } = useAuth();
-
-onError((error: FetchError) => {
-  switch (error.data.code) {
-    default:
-      serverErrorMessage.value = "something went wrong";
-      break;
-  }
-});
-
-onLogin(() => {
-  router.push("/home");
+const { login } = useAuth({
+  autoLogin: true,
+  onLogin: async () => {
+    void router.push("/home");
+  },
+  onError: (error: FetchError) => {
+    if (error.status === 401) {
+      serverErrorMessage.value = "Invalid username or password";
+    } else {
+      serverErrorMessage.value = "An error occurred. Please try again later.";
+    }
+  },
 });
 
 const submitForm = () => {

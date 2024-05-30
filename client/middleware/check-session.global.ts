@@ -6,15 +6,6 @@ export default defineNuxtRouteMiddleware(async (to, from) => {
   const { isLoggedIn, checkSession } = useAuth({ autoLogin: false });
 
   if (!isLoggedIn.value) {
-    const isSessionValid = await checkSession();
-    if (!isSessionValid) {
-      return navigateTo("/login");
-    }
+    await checkSession();
   }
-  // try {
-  //   await $fetch.raw("/api/auth/session");
-  //   return;
-  // } catch (e) {
-  //   return navigateTo("/login");
-  // }
 });
