@@ -17,7 +17,7 @@
         >
           <img
             src="/placeholder.svg"
-            alt="Trending Recipe 1"
+            alt="Trending RecipeType 1"
             class="mb-4 h-48 w-full rounded-lg object-cover"
             width="300"
             height="200"
@@ -32,7 +32,7 @@
         >
           <img
             src="/placeholder.svg"
-            alt="Trending Recipe 2"
+            alt="Trending RecipeType 2"
             class="mb-4 h-48 w-full rounded-lg object-cover"
             width="300"
             height="200"
@@ -47,7 +47,7 @@
         >
           <img
             src="/placeholder.svg"
-            alt="Trending Recipe 3"
+            alt="Trending RecipeType 3"
             class="mb-4 h-48 w-full rounded-lg object-cover"
             width="300"
             height="200"
@@ -62,7 +62,7 @@
         >
           <img
             src="/placeholder.svg"
-            alt="Trending Recipe 4"
+            alt="Trending RecipeType 4"
             class="mb-4 h-48 w-full rounded-lg object-cover"
             width="300"
             height="200"

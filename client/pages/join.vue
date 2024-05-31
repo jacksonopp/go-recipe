@@ -87,7 +87,7 @@ const submitForm = async () => {
           <h1
             class="text-4xl font-header font-semibold text-white md:text-5xl lg:text-6xl"
           >
-            Join our Recipe Community
+            Join our RecipeType Community
           </h1>
           <p class="text-lg font-header text-gray-200 md:text-xl lg:text-2xl">
             Connect with home cooks, share your favorite recipes, and discover
