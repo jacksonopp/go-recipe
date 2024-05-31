@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import MasonryGrid from "~/components/homepage/MasonryGrid.vue";
+
 definePageMeta({
   layout: "authenticated",
   middleware: ["auth"],
@@ -6,9 +8,9 @@ definePageMeta({
 </script>
 
 <template>
-  <p>hi</p>
-  <NuxtLink to="/join">Join</NuxtLink>
-  <NuxtLink to="/login">Login</NuxtLink>
+  <main class="mx-auto pt-8 bg-orange-50/70">
+    <MasonryGrid />
+  </main>
 </template>
 
 <style scoped></style>

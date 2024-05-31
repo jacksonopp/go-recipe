@@ -2,7 +2,7 @@
 import type { Comment } from "~/types/comment.type";
 
 const comments: Comment[] = new Array(3).fill(null).map(() => ({
-  name: "Sarah",
+  username: "Sarah",
   date: "2 days ago",
   content:
     "This Bolognese recipe is absolutely delicious! The flavors are so rich and comforting. I'll definitely be making this again.",

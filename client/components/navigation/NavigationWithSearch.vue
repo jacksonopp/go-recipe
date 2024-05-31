@@ -21,7 +21,7 @@ const toggleDialog = () => {
       <div class="relative w-full">
         <input
           placeholder="Search recipes..."
-          class="w-full rounded-full border border-gray-300 py-2 pl-4 text-lg focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus-visible:ring-orange-500"
+          class="w-full rounded-full bg-gray-200/50 py-2 pl-4 text-lg focus:bg-white focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus-visible:ring-orange-500"
           type="text"
         />
         <button

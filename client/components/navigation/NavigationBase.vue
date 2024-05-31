@@ -12,7 +12,7 @@ const props = defineProps({
 </script>
 
 <template>
-  <header class="bg-white shadow-sm">
+  <header class="bg-white/60 shadow-sm sticky top-0 backdrop-blur">
     <div class="flex items-center py-4 md:mx-6 md:py-5">
       <div>
         <NuxtLink

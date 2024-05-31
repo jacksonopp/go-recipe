@@ -12,7 +12,6 @@ const { data: recipe } = useFetch<RecipeType>(`/api/recipe/${route.params.id}`);
 </script>
 
 <template>
-  <pre>{{ JSON.stringify(data, null, 2) }}</pre>
   <div class="flex flex-col min-h-[100dvh]">
     <section class="w-full py-12 md:py-24 lg:py-32 bg-orange-600">
       <div class="container px-4 md:px-6">
