@@ -19,6 +19,7 @@ const (
 	ErrIngredientConflict
 	ErrInstructionNotFound
 	ErrInstructionConflict
+	ErrTagConflict
 )
 
 type RecipeServiceError struct {
@@ -54,6 +55,9 @@ type RecipeService interface {
 	UpdateInstruction(recipeID, instructionID uint, contents string) (*domain.Recipe, error)
 	SwapInstructions(recipeID, instructionOneID, instructionTwoID uint) (*domain.Recipe, error)
 	DeleteInstruction(recipeID, instructionID uint) error
+
+	//	TAGS
+	AddTagToRecipe(recipeID uint, tagId uint) (*domain.Recipe, error)
 }
 
 type recipeService struct {
@@ -906,6 +910,129 @@ func (r *recipeService) DeleteInstruction(recipeID, instructionID uint) error {
 	}
 }
 
+// TAGS
+
+// AddTagToRecipe adds a tag to the recipe with the given ID.
+// It also adds the recipe to the tag.
+func (r *recipeService) AddTagToRecipe(recipeID, tagID uint) (*domain.Recipe, error) {
+	ctx, cancel := context.WithTimeout(r.ctx, DEFAULT_TIMEOUT)
+	defer cancel()
+	ch := make(chan recipeVal)
+
+	go func() {
+		defer cancel()
+		tx := r.db.Begin()
+		defer recoverTx(tx)
+
+		// Get recipe
+		recipe, err := getRecipeByIdWithTx(r.ctx, tx, recipeID)
+		if err != nil {
+			log.Println("error getting recipe", err)
+			tx.Rollback()
+			ch <- recipeVal{
+				nil,
+				NewRecipeServiceError(
+					ErrUnknownRecipe,
+					fmt.Sprintf("error getting recipe: %v", err),
+				),
+			}
+			return
+		}
+
+		// Check if tag already exists in recipe
+		for _, tag := range recipe.Tags {
+			if tag.ID == tagID {
+				err := fmt.Sprintf("tag %d already exists in recipe %d", tagID, recipeID)
+				log.Println(err)
+				tx.Rollback()
+				ch <- recipeVal{
+					nil,
+					NewRecipeServiceError(
+						ErrTagConflict,
+						err,
+					),
+				}
+				return
+			}
+		}
+
+		// Get tag
+		var tag domain.Tag
+		err = tx.First(&tag, tagID).Error
+		if err != nil {
+			log.Println("error getting tag", err)
+			tx.Rollback()
+			ch <- recipeVal{
+				nil,
+				NewRecipeServiceError(
+					ErrUnknownRecipe,
+					fmt.Sprintf("error getting tag: %v", err),
+				),
+			}
+			return
+		}
+
+		// Add tag to recipe
+		err = tx.Model(&recipe).Association("Tags").Append(&tag)
+		if err != nil {
+			log.Println("error adding tag to recipe", err)
+			tx.Rollback()
+			ch <- recipeVal{
+				nil,
+				NewRecipeServiceError(
+					ErrUnknownRecipe,
+					fmt.Sprintf("error adding tag to recipe: %v", err),
+				),
+			}
+			return
+		}
+
+		// Add recipe to tag
+		err = tx.Model(&domain.Tag{}).
+			Where("id = ?", tagID).
+			Association("Recipes").
+			Append(&recipe)
+		if err != nil {
+			log.Println("error adding recipe to tag", err)
+			tx.Rollback()
+			ch <- recipeVal{
+				nil,
+				NewRecipeServiceError(
+					ErrUnknownRecipe,
+					fmt.Sprintf("error adding recipe to tag: %v", err),
+				),
+			}
+			return
+		}
+
+		// Commit transaction
+		err = tx.Commit().Error
+		if err != nil {
+			log.Println("error committing transaction", err)
+			ch <- recipeVal{
+				nil,
+				NewRecipeServiceError(
+					ErrUnknownRecipe,
+					fmt.Sprintf("error committing transaction: %v", err),
+				),
+			}
+			return
+		}
+
+		ch <- recipeVal{recipe, nil}
+	}()
+
+	select {
+	case v := <-ch:
+		return v.recipe, v.err
+	case <-ctx.Done():
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			return nil, NewRecipeServiceError(ErrUnknownRecipe, "timeout adding tag to recipe")
+		}
+		return nil, NewRecipeServiceError(ErrUnknownRecipe, "timeout cancelled without error")
+	}
+}
+
 func getRecipeByIdWithTx(ctx context.Context, tx *gorm.DB, id uint) (*domain.Recipe, error) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
@@ -915,7 +1042,10 @@ func getRecipeByIdWithTx(ctx context.Context, tx *gorm.DB, id uint) (*domain.Rec
 		defer cancel()
 
 		var recipe domain.Recipe
-		err := tx.Preload("Ingredients").First(&recipe, id).Error
+		err := tx.
+			Preload("Ingredients").
+			Preload("Tags").
+			First(&recipe, id).Error
 		if err != nil {
 			log.Println("error getting recipe", err)
 			if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -964,11 +1094,5 @@ func getRecipeByIdWithTx(ctx context.Context, tx *gorm.DB, id uint) (*domain.Rec
 			return nil, NewRecipeServiceError(ErrUnknownRecipe, "timeout getting recipe")
 		}
 		return nil, NewRecipeServiceError(ErrUnknownRecipe, "timeout cancelled without error")
-	}
-}
-
-func recoverTx(tx *gorm.DB) {
-	if r := recover(); r != nil {
-		tx.Rollback()
 	}
 }

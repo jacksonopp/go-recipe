@@ -41,6 +41,9 @@ func (h *RecipeHandler) RegisterRoutes() {
 	h.r.Patch("/:id/instruction/:instructionOneId/:instructionTwoId", AuthMiddleware(h.db), h.swapInstructions)
 	h.r.Delete("/:id/instruction/:instructionId", AuthMiddleware(h.db), h.deleteInstruction)
 	//	TODO delete instruction
+
+	//	TAGS
+	h.r.Patch("/:recipeId/tag/:tagId", AuthMiddleware(h.db), h.addTagToRecipe)
 }
 
 // RECIPES
@@ -375,6 +378,27 @@ func (h *RecipeHandler) deleteInstruction(c *fiber.Ctx) error {
 	}
 
 	return c.SendStatus(fiber.StatusNoContent)
+}
+
+// TAGS
+// PATCH /recipe/:recipeId/tag/:tagId
+func (h *RecipeHandler) addTagToRecipe(c *fiber.Ctx) error {
+	recipeId, err := strconv.Atoi(c.Params("recipeId"))
+	if err != nil {
+		return SendError(c, BadRequest("id must be an integer"))
+	}
+
+	tagId, err := strconv.Atoi(c.Params("tagId"))
+	if err != nil {
+		return SendError(c, BadRequest("invalid request body"))
+	}
+
+	recipe, err := h.recipeService.AddTagToRecipe(uint(recipeId), uint(tagId))
+	if err != nil {
+		return SendError(c, InternalServerError())
+	}
+
+	return c.JSON(recipe.ToDto())
 }
 
 func getUserFromLocals(c *fiber.Ctx) (domain.User, error) {

@@ -14,16 +14,23 @@ type Recipe struct {
 	UserID       uint          `json:"user_id"`
 	Ingredients  []Ingredient  `gorm:"foreignKey:RecipeID"`
 	Instructions []Instruction `gorm:"foreignKey:RecipeID"`
+	Tags         []*Tag        `gorm:"many2many:recipe_tags"`
 }
 
 // RecipeDto is a DTO for a Recipe.
 type RecipeDto struct {
-	ID           uint      `json:"id"`
-	CreatedAt    time.Time `json:"created_at"`
-	Name         string    `json:"name"`
-	Description  string    `json:"description"`
-	Ingredients  []Dto     `json:"ingredients"`
-	Instructions []Dto     `json:"instructions"`
+	ID           uint        `json:"id"`
+	CreatedAt    time.Time   `json:"created_at"`
+	Name         string      `json:"name"`
+	Description  string      `json:"description"`
+	Ingredients  []Dto       `json:"ingredients"`
+	Instructions []Dto       `json:"instructions"`
+	Tags         []simpleTag `json:"tags"`
+}
+
+type simpleTag struct {
+	ID  uint   `json:"id"`
+	Tag string `json:"tag"`
 }
 
 // ToDto converts a Recipe to a RecipeDto.
@@ -38,6 +45,14 @@ func (r *Recipe) ToDto() Dto {
 		instructions[i] = instruction.ToDto()
 	}
 
+	tags := make([]simpleTag, len(r.Tags))
+	for i, tag := range r.Tags {
+		tags[i] = simpleTag{
+			ID:  tag.ID,
+			Tag: tag.Tag,
+		}
+	}
+
 	return RecipeDto{
 		ID:           r.ID,
 		CreatedAt:    r.CreatedAt,
@@ -45,6 +60,7 @@ func (r *Recipe) ToDto() Dto {
 		Description:  r.Description,
 		Ingredients:  ingredients,
 		Instructions: instructions,
+		Tags:         tags,
 	}
 }
 

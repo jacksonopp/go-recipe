@@ -3,6 +3,7 @@ package services
 import (
 	"crypto/rand"
 	"golang.org/x/crypto/bcrypt"
+	"gorm.io/gorm"
 	"time"
 )
 
@@ -34,4 +35,10 @@ func genRandStr(length int) (string, error) {
 	}
 
 	return string(bytes), nil
+}
+
+func recoverTx(tx *gorm.DB) {
+	if r := recover(); r != nil {
+		tx.Rollback()
+	}
 }

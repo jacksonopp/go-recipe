@@ -27,8 +27,14 @@ func main() {
 	authHandler := handlers.NewAuthHandler(api, db)
 	recipeHandler := handlers.NewRecipeHandler(api, db)
 	userHandler := handlers.NewUserHandler(api, db)
+	tagHandler := handlers.NewTagHandler(api, db)
 
-	createApiRoutes(authHandler, recipeHandler, userHandler)
+	createApiRoutes(
+		authHandler,
+		recipeHandler,
+		userHandler,
+		tagHandler,
+	)
 
 	sessionService := services.NewSessionService(db)
 
@@ -79,6 +85,7 @@ func createDb() (*gorm.DB, error) {
 		&domain.Recipe{},
 		&domain.Ingredient{},
 		&domain.Instruction{},
+		&domain.Tag{},
 	)
 	if err != nil {
 		return nil, err
