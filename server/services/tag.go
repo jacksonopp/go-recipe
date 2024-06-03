@@ -11,6 +11,7 @@ import (
 type TagService interface {
 	GetAllTags() ([]*domain.Tag, error)
 	CreateTag(tag string) (*domain.Tag, error)
+	DeleteTag(id uint) error
 }
 
 type tagService struct {
@@ -28,6 +29,7 @@ type TagServiceErrorCode int
 const (
 	TagServiceErrorUnknown TagServiceErrorCode = iota
 	TagServiceErrorNotFound
+	TagServiceErrorDuplicate
 )
 
 type TagServiceError struct {
@@ -92,6 +94,10 @@ func (s *tagService) CreateTag(tag string) (*domain.Tag, error) {
 		err := tx.Create(tag).Error
 		if err != nil {
 			tx.Rollback()
+			if errors.Is(err, gorm.ErrDuplicatedKey) {
+				ch <- tagVal{tag: nil, err: NewTagServiceError(TagServiceErrorDuplicate, err.Error())}
+				return
+			}
 			ch <- tagVal{tag: nil, err: NewTagServiceError(TagServiceErrorUnknown, err.Error())}
 			return
 		}
@@ -112,5 +118,60 @@ func (s *tagService) CreateTag(tag string) (*domain.Tag, error) {
 			return nil, NewTagServiceError(TagServiceErrorUnknown, "timeout exceeded")
 		}
 		return nil, NewTagServiceError(TagServiceErrorUnknown, "unknown error")
+	}
+}
+
+func (s *tagService) DeleteTag(id uint) error {
+	ctx, cancel := context.WithTimeout(s.ctx, DEFAULT_TIMEOUT)
+	defer cancel()
+	errCh := make(chan error)
+
+	go func() {
+		defer cancel()
+		tx := s.db.Begin()
+		defer recoverTx(tx)
+
+		// check if tag exists
+		tag := &domain.Tag{}
+		err := tx.First(tag, id).Error
+		if err != nil {
+			tx.Rollback()
+			errCh <- NewTagServiceError(TagServiceErrorNotFound, err.Error())
+			return
+		}
+
+		//	remove associations
+		err = tx.Model(tag).Association("Recipes").Clear()
+		if err != nil {
+			tx.Rollback()
+			errCh <- NewTagServiceError(TagServiceErrorUnknown, err.Error())
+			return
+		}
+
+		// delete tag
+		err = tx.Delete(tag).Error
+		if err != nil {
+			tx.Rollback()
+			errCh <- NewTagServiceError(TagServiceErrorUnknown, err.Error())
+			return
+		}
+
+		err = tx.Commit().Error
+		if err != nil {
+			tx.Rollback()
+			errCh <- NewTagServiceError(TagServiceErrorUnknown, err.Error())
+			return
+		}
+		errCh <- nil
+	}()
+
+	select {
+	case err := <-errCh:
+		return err
+	case <-ctx.Done():
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			return NewTagServiceError(TagServiceErrorUnknown, "timeout exceeded")
+		}
+		return NewTagServiceError(TagServiceErrorUnknown, "unknown error")
 	}
 }

@@ -5,6 +5,7 @@ import (
 	"github.com/jacksonopp/go-recipe/domain"
 	"github.com/jacksonopp/go-recipe/services"
 	"gorm.io/gorm"
+	"strconv"
 )
 
 type TagHandler struct {
@@ -22,8 +23,10 @@ func NewTagHandler(r fiber.Router, db *gorm.DB) *TagHandler {
 func (h *TagHandler) RegisterRoutes() {
 	h.r.Get("/", h.GetTags)
 	h.r.Post("/", h.CreateTag)
+	h.r.Delete("/:id", h.DeleteTag)
 }
 
+// GET /tag
 func (h *TagHandler) GetTags(c *fiber.Ctx) error {
 	tags, err := h.tagService.GetAllTags()
 	if err != nil {
@@ -39,6 +42,7 @@ func (h *TagHandler) GetTags(c *fiber.Ctx) error {
 	return c.JSON(tagDtos)
 }
 
+// POST /tag
 func (h *TagHandler) CreateTag(c *fiber.Ctx) error {
 	tag := struct {
 		Tag string `json:"tag"`
@@ -51,8 +55,27 @@ func (h *TagHandler) CreateTag(c *fiber.Ctx) error {
 	createdTag, err := h.tagService.CreateTag(tag.Tag)
 	if err != nil {
 		//TODO handle error codes
+		if err.(services.TagServiceError).Code == services.TagServiceErrorDuplicate {
+			return SendError(c, Conflict(map[string]string{"tag": "tag already exists"}))
+		}
 		return SendError(c, InternalServerError())
 	}
 
 	return c.JSON(createdTag.ToDto())
+}
+
+// DELETE /tag/:id
+func (h *TagHandler) DeleteTag(c *fiber.Ctx) error {
+	id, err := strconv.Atoi(c.Params("id"))
+	if err != nil {
+		return SendError(c, BadRequest("invalid id"))
+	}
+
+	err = h.tagService.DeleteTag(uint(id))
+	if err != nil {
+		//TODO handle error codes
+		return SendError(c, InternalServerError())
+	}
+
+	return c.SendStatus(fiber.StatusNoContent)
 }
