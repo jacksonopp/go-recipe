@@ -45,6 +45,7 @@ func (h *RecipeHandler) RegisterRoutes() {
 
 	//	TAGS
 	h.r.Patch("/:recipeId/tag/:tagId", AuthMiddleware(h.db), h.addTagToRecipe)
+	h.r.Delete("/:recipeId/tag/:tagId", AuthMiddleware(h.db), h.removeTagFromRecipe)
 }
 
 // RECIPES
@@ -403,6 +404,32 @@ func (h *RecipeHandler) addTagToRecipe(c *fiber.Ctx) error {
 	}
 
 	return c.JSON(recipe.ToDto())
+}
+
+// DELETE /recipe/:recipeId/tag/:tagId
+func (h *RecipeHandler) removeTagFromRecipe(c *fiber.Ctx) error {
+	recipeId, err := strconv.Atoi(c.Params("recipeId"))
+	if err != nil {
+		return SendError(c, BadRequest("id must be an integer"))
+	}
+
+	tagId, err := strconv.Atoi(c.Params("tagId"))
+	if err != nil {
+		return SendError(c, BadRequest("invalid request body"))
+	}
+
+	err = h.recipeService.RemoveTagFromRecipe(uint(recipeId), uint(tagId))
+	if err != nil {
+		if errors.Is(err, services.ErrRecipeNotFound) {
+			return SendError(c, NotFound(map[string]string{"error": "recipe not found"}))
+		}
+		if errors.Is(err, services.ErrTagNotFound) {
+			return SendError(c, NotFound(map[string]string{"error": "tag not found"}))
+		}
+		return SendError(c, InternalServerError())
+	}
+
+	return c.SendStatus(fiber.StatusNoContent)
 }
 
 func getUserFromLocals(c *fiber.Ctx) (domain.User, error) {

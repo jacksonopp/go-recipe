@@ -30,6 +30,7 @@ type RecipeService interface {
 
 	//	TAGS
 	AddTagToRecipe(recipeID uint, tagId uint) (*domain.Recipe, error)
+	RemoveTagFromRecipe(recipeID uint, tagId uint) error
 }
 
 type recipeService struct {
@@ -904,6 +905,65 @@ func (r *recipeService) AddTagToRecipe(recipeID, tagID uint) (*domain.Recipe, er
 			return nil, ErrTimeout
 		}
 		return nil, ErrTimeoutNoMessage
+	}
+}
+
+// RemoveTagFromRecipe removes a tag from the recipe with the given ID.
+// It also removes the recipe from the tag.
+func (r *recipeService) RemoveTagFromRecipe(recipeID, tagID uint) error {
+	ctx, cancel := context.WithTimeout(r.ctx, DEFAULT_TIMEOUT)
+	defer cancel()
+	errCh := make(chan error)
+
+	go func() {
+		defer cancel()
+		tx := r.db.Begin()
+		defer recoverTx(tx)
+
+		err := tx.Model(&domain.Recipe{}).
+			Where("id = ?", recipeID).
+			Association("Tags").
+			Delete(&domain.Tag{}, tagID)
+		if err != nil {
+			tx.Rollback()
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				errCh <- ErrTagNotFound
+				return
+			}
+			errCh <- ErrUnknown
+			return
+		}
+
+		err = tx.Model(&domain.Tag{}).
+			Where("id = ?", tagID).
+			Association("Recipes").
+			Delete(&domain.Recipe{}, recipeID)
+		if err != nil {
+			tx.Rollback()
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				errCh <- ErrRecipeNotFound
+				return
+			}
+			errCh <- ErrUnknown
+			return
+		}
+
+		err = tx.Commit().Error
+		if err != nil {
+			errCh <- ErrCommit
+			return
+		}
+		errCh <- nil
+	}()
+
+	select {
+	case err := <-errCh:
+		return err
+	case <-ctx.Done():
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			return ErrTimeout
+		}
+		return ErrTimeoutNoMessage
 	}
 }
 
