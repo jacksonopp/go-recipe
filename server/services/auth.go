@@ -11,8 +11,7 @@ import (
 type AuthServiceErrorCode int
 
 const (
-	ErrUnknown AuthServiceErrorCode = iota
-	ErrUserAlreadyExists
+	ErrUserAlreadyExists = iota
 	ErrUserNotFound
 	ErrPasswordMismatch
 )
@@ -67,7 +66,7 @@ func (s *authService) CreateUser(user domain.User) error {
 		if errors.Is(result.Error, gorm.ErrDuplicatedKey) {
 			return NewAuthServiceError(ErrUserAlreadyExists, "user already exists")
 		}
-		return NewAuthServiceError(ErrUnknown, "unknown error")
+		return ErrUnknown
 	}
 
 	return result.Error
@@ -81,7 +80,7 @@ func (s *authService) GetUserByName(name string) (*domain.User, error) {
 			return nil, NewAuthServiceError(ErrUserNotFound, "user not found")
 		}
 		log.Println("error getting user by name", tx.Error)
-		return nil, NewAuthServiceError(ErrUnknown, "unknown error")
+		return nil, ErrUnknown
 	}
 	return &user, nil
 }

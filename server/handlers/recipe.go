@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"github.com/gofiber/fiber/v2"
 	"github.com/jacksonopp/go-recipe/domain"
 	"github.com/jacksonopp/go-recipe/services"
@@ -100,7 +101,10 @@ func (h *RecipeHandler) getRecipeById(c *fiber.Ctx) error {
 
 	recipe, err := h.recipeService.GetRecipeById(uint(recipeId))
 	if err != nil {
-		return SendError(c, NotFound(map[string]string{"error": "recipe not found"}))
+		if errors.Is(err, services.ErrRecipeNotFound) {
+			return SendError(c, NotFound(map[string]string{"error": "recipe not found"}))
+		}
+		return SendError(c, InternalServerError())
 	}
 
 	return c.JSON(recipe.ToDto())
@@ -183,7 +187,7 @@ func (h *RecipeHandler) createIngredient(c *fiber.Ctx) error {
 
 	recipe, err := h.recipeService.AddIngredientToRecipe(uint(id), ingredient.Name, ingredient.Quantity, ingredient.Unit)
 	if err != nil {
-		if v, ok := err.(services.RecipeServiceError); ok && v.Code == services.ErrRecipeNotFound {
+		if errors.Is(err, services.ErrRecipeNotFound) {
 			return SendError(c, NotFound(map[string]string{"error": "recipe not found"}))
 		}
 		log.Println("error creating ingredient", err)
@@ -253,10 +257,10 @@ func (h *RecipeHandler) deleteIngredient(c *fiber.Ctx) error {
 
 	err = h.recipeService.DeleteIngredient(uint(recipeID), uint(ingredientID))
 	if err != nil {
-		if v, ok := err.(services.RecipeServiceError); ok && v.Code == services.ErrRecipeNotFound {
+		if errors.Is(err, services.ErrRecipeNotFound) {
 			return SendError(c, NotFound(map[string]string{"error": "recipe not found"}))
 		}
-		if v, ok := err.(services.RecipeServiceError); ok && v.Code == services.ErrIngredientConflict {
+		if errors.Is(err, services.ErrIngredientConflict) {
 			return SendError(c, Conflict(map[string]string{"error": "ingredient does not belong to recipe"}))
 		}
 		log.Println("error deleting ingredient", err)

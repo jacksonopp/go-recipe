@@ -74,9 +74,9 @@ func (s *tagService) GetAllTags() ([]*domain.Tag, error) {
 		return v.tags, v.err
 	case <-ctx.Done():
 		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-			return nil, NewTagServiceError(TagServiceErrorUnknown, "timeout exceeded")
+			return nil, ErrTimeout
 		}
-		return nil, NewTagServiceError(TagServiceErrorUnknown, "unknown error")
+		return nil, ErrTimeoutNoMessage
 	}
 
 }
@@ -95,10 +95,10 @@ func (s *tagService) CreateTag(tag string) (*domain.Tag, error) {
 		if err != nil {
 			tx.Rollback()
 			if errors.Is(err, gorm.ErrDuplicatedKey) {
-				ch <- tagVal{tag: nil, err: NewTagServiceError(TagServiceErrorDuplicate, err.Error())}
+				ch <- tagVal{tag: nil, err: ErrTagConflict}
 				return
 			}
-			ch <- tagVal{tag: nil, err: NewTagServiceError(TagServiceErrorUnknown, err.Error())}
+			ch <- tagVal{tag: nil, err: ErrUnknown}
 			return
 		}
 		err = tx.Commit().Error
