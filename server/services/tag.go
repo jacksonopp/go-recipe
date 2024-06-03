@@ -24,27 +24,6 @@ func NewTagService(db *gorm.DB) TagService {
 	return &tagService{db: db, ctx: ctx}
 }
 
-type TagServiceErrorCode int
-
-const (
-	TagServiceErrorUnknown TagServiceErrorCode = iota
-	TagServiceErrorNotFound
-	TagServiceErrorDuplicate
-)
-
-type TagServiceError struct {
-	Message string
-	Code    TagServiceErrorCode
-}
-
-func (e TagServiceError) Error() string {
-	return e.Message
-}
-
-func NewTagServiceError(code TagServiceErrorCode, message string) error {
-	return TagServiceError{Message: message, Code: code}
-}
-
 type tagVal struct {
 	tag *domain.Tag
 	err error
@@ -104,7 +83,7 @@ func (s *tagService) CreateTag(tag string) (*domain.Tag, error) {
 		err = tx.Commit().Error
 		if err != nil {
 			tx.Rollback()
-			ch <- tagVal{tag: nil, err: NewTagServiceError(TagServiceErrorUnknown, err.Error())}
+			ch <- tagVal{tag: nil, err: ErrUnknown}
 			return
 		}
 		ch <- tagVal{tag: tag, err: nil}
@@ -115,9 +94,9 @@ func (s *tagService) CreateTag(tag string) (*domain.Tag, error) {
 		return v.tag, v.err
 	case <-ctx.Done():
 		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-			return nil, NewTagServiceError(TagServiceErrorUnknown, "timeout exceeded")
+			return nil, ErrTimeout
 		}
-		return nil, NewTagServiceError(TagServiceErrorUnknown, "unknown error")
+		return nil, ErrTimeoutNoMessage
 	}
 }
 
@@ -136,7 +115,7 @@ func (s *tagService) DeleteTag(id uint) error {
 		err := tx.First(tag, id).Error
 		if err != nil {
 			tx.Rollback()
-			errCh <- NewTagServiceError(TagServiceErrorNotFound, err.Error())
+			errCh <- ErrTagNotFound
 			return
 		}
 
@@ -144,7 +123,7 @@ func (s *tagService) DeleteTag(id uint) error {
 		err = tx.Model(tag).Association("Recipes").Clear()
 		if err != nil {
 			tx.Rollback()
-			errCh <- NewTagServiceError(TagServiceErrorUnknown, err.Error())
+			errCh <- ErrUnknown
 			return
 		}
 
@@ -152,14 +131,14 @@ func (s *tagService) DeleteTag(id uint) error {
 		err = tx.Delete(tag).Error
 		if err != nil {
 			tx.Rollback()
-			errCh <- NewTagServiceError(TagServiceErrorUnknown, err.Error())
+			errCh <- ErrUnknown
 			return
 		}
 
 		err = tx.Commit().Error
 		if err != nil {
 			tx.Rollback()
-			errCh <- NewTagServiceError(TagServiceErrorUnknown, err.Error())
+			errCh <- ErrCommit
 			return
 		}
 		errCh <- nil
@@ -170,8 +149,8 @@ func (s *tagService) DeleteTag(id uint) error {
 		return err
 	case <-ctx.Done():
 		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-			return NewTagServiceError(TagServiceErrorUnknown, "timeout exceeded")
+			return ErrTimeout
 		}
-		return NewTagServiceError(TagServiceErrorUnknown, "unknown error")
+		return ErrTimeoutNoMessage
 	}
 }

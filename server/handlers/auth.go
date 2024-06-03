@@ -66,17 +66,15 @@ func (h *AuthHandler) register(c *fiber.Ctx) error {
 	}
 
 	if err := h.authService.CreateUser(u); err != nil {
-		var e services.AuthServiceError
-		if errors.As(err, &e) {
-			if e.Code == services.ErrUserAlreadyExists {
-				err := Conflict(map[string]string{"username": e.Msg})
-				return SendError(c, err)
-			}
+		if errors.Is(err, services.ErrUserAlreadyExists) {
+			err := Conflict(map[string]string{"username": "username already exists"})
+			return SendError(c, err)
 		}
 
 		log.Printf("error creating user: %v", err)
-		return InternalServerError()
+		return SendError(c, InternalServerError())
 	}
+
 	return c.Redirect("/login", fiber.StatusPermanentRedirect)
 }
 

@@ -2,35 +2,10 @@ package services
 
 import (
 	"errors"
-	"fmt"
 	"github.com/jacksonopp/go-recipe/domain"
 	"gorm.io/gorm"
 	"log"
 )
-
-type AuthServiceErrorCode int
-
-const (
-	ErrUserAlreadyExists = iota
-	ErrUserNotFound
-	ErrPasswordMismatch
-)
-
-type AuthServiceError struct {
-	Code AuthServiceErrorCode
-	Msg  string
-}
-
-func NewAuthServiceError(code AuthServiceErrorCode, msg string) AuthServiceError {
-	return AuthServiceError{
-		Code: code,
-		Msg:  msg,
-	}
-}
-
-func (e AuthServiceError) Error() string {
-	return fmt.Sprintf("user service error: %v", e.Msg)
-}
 
 type authService struct {
 	db *gorm.DB
@@ -64,7 +39,7 @@ func (s *authService) CreateUser(user domain.User) error {
 
 	if result.Error != nil {
 		if errors.Is(result.Error, gorm.ErrDuplicatedKey) {
-			return NewAuthServiceError(ErrUserAlreadyExists, "user already exists")
+			return ErrUserAlreadyExists
 		}
 		return ErrUnknown
 	}
@@ -77,7 +52,7 @@ func (s *authService) GetUserByName(name string) (*domain.User, error) {
 	tx := s.db.Where("username = ?", name).First(&user)
 	if tx.Error != nil {
 		if errors.Is(tx.Error, gorm.ErrRecordNotFound) {
-			return nil, NewAuthServiceError(ErrUserNotFound, "user not found")
+			return nil, ErrUserNotFound
 		}
 		log.Println("error getting user by name", tx.Error)
 		return nil, ErrUnknown
@@ -95,7 +70,7 @@ func (s *authService) LoginUser(name, password string) (*domain.User, error) {
 	ok := checkPasswordHash(password, user.Salt, user.Password)
 	if !ok {
 		log.Println("password mismatch")
-		return nil, NewAuthServiceError(ErrPasswordMismatch, "passwords do not match")
+		return nil, ErrPasswordMismatch
 	}
 
 	user.Salt = ""

@@ -8,36 +8,12 @@ import (
 	"time"
 )
 
-type SessionServiceErrorCode int
-
-const (
-	ErrUnknownSession SessionServiceErrorCode = iota
-	ErrSessionNotFound
-	ErrSessionExpired
-)
-
 type SessionService struct {
 	db *gorm.DB
 }
 
 func NewSessionService(db *gorm.DB) SessionService {
 	return SessionService{db: db}
-}
-
-type SessionServiceError struct {
-	Code SessionServiceErrorCode
-	Msg  string
-}
-
-func NewSessionServiceError(code SessionServiceErrorCode, msg string) SessionServiceError {
-	return SessionServiceError{
-		Code: code,
-		Msg:  msg,
-	}
-}
-
-func (e SessionServiceError) Error() string {
-	return e.Msg
 }
 
 func (s *SessionService) CreateSession(userID uint) (string, error) {
@@ -65,9 +41,9 @@ func (s *SessionService) CheckSession(token string) error {
 	res := s.db.First(&session, "token = ?", token)
 	if res.Error != nil {
 		if errors.Is(res.Error, gorm.ErrRecordNotFound) {
-			return NewSessionServiceError(ErrSessionNotFound, "session not found")
+			return ErrSessionNotFound
 		}
-		return NewSessionServiceError(ErrUnknownSession, res.Error.Error())
+		return ErrUnknown
 	}
 
 	if session.ExpiresAt.Before(time.Now()) {
@@ -75,7 +51,7 @@ func (s *SessionService) CheckSession(token string) error {
 		if err != nil {
 			return err
 		}
-		return NewSessionServiceError(ErrSessionExpired, "session expired")
+		return ErrSessionExpired
 	}
 
 	return nil
@@ -85,9 +61,9 @@ func (s *SessionService) DeleteSessionByToken(token string) error {
 	res := s.db.Delete(&domain.Session{}, "token = ?", token)
 	if res.Error != nil {
 		if errors.Is(res.Error, gorm.ErrRecordNotFound) {
-			return NewSessionServiceError(ErrSessionNotFound, "session not found")
+			return ErrSessionNotFound
 		}
-		return NewSessionServiceError(ErrUnknownSession, res.Error.Error())
+		return ErrUnknown
 	}
 	return nil
 }

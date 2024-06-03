@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"github.com/gofiber/fiber/v2"
 	"github.com/jacksonopp/go-recipe/domain"
 	"github.com/jacksonopp/go-recipe/services"
@@ -55,7 +56,7 @@ func (h *TagHandler) CreateTag(c *fiber.Ctx) error {
 	createdTag, err := h.tagService.CreateTag(tag.Tag)
 	if err != nil {
 		//TODO handle error codes
-		if err.(services.TagServiceError).Code == services.TagServiceErrorDuplicate {
+		if errors.Is(err, services.ErrTagConflict) {
 			return SendError(c, Conflict(map[string]string{"tag": "tag already exists"}))
 		}
 		return SendError(c, InternalServerError())

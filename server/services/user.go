@@ -3,32 +3,12 @@ package services
 import (
 	"context"
 	"errors"
-	"fmt"
 	"github.com/jacksonopp/go-recipe/db"
 	"github.com/jacksonopp/go-recipe/domain"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 	"log"
 )
-
-type UserServiceErrorCode int
-
-const (
-	UserNotFound UserServiceErrorCode = iota
-)
-
-type UserServiceError struct {
-	Code UserServiceErrorCode
-	Err  error
-}
-
-func NewUserServiceError(code UserServiceErrorCode, err error) UserServiceError {
-	return UserServiceError{Code: code, Err: err}
-}
-
-func (e UserServiceError) Error() string {
-	return e.Err.Error()
-}
 
 type UserService interface {
 	GetUserById(id uint) (*domain.User, error)
@@ -68,7 +48,7 @@ func (s userService) GetUserById(id uint) (*domain.User, error) {
 
 		if err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
-				err := NewUserServiceError(UserNotFound, err)
+				err := ErrUserNotFound
 				ch <- userVal{user: nil, err: err}
 				return
 			}
@@ -105,7 +85,7 @@ func (s userService) GetUserByUsername(name string) (*domain.User, error) {
 
 		if err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
-				err := NewUserServiceError(UserNotFound, err)
+				err := ErrUserNotFound
 				ch <- userVal{user: nil, err: err}
 				return
 			}
@@ -152,7 +132,7 @@ func (s userService) GetUsersRecipes(name string, page, limit int) ([]domain.Rec
 
 		if err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
-				err := NewUserServiceError(UserNotFound, fmt.Errorf("user %s not found", name))
+				err := ErrUserNotFound
 				ch <- recipesVal{recipes: nil, err: err}
 				return
 			}

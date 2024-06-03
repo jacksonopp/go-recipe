@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"github.com/gofiber/fiber/v2"
 	"github.com/jacksonopp/go-recipe/domain"
 	"github.com/jacksonopp/go-recipe/services"
@@ -46,7 +47,7 @@ func (h *UserHandler) getUserRecipes(c *fiber.Ctx) error {
 
 	recipes, err := h.userService.GetUsersRecipes(username, page, limit)
 	if err != nil {
-		if v, ok := err.(services.UserServiceError); ok && v.Code == services.UserNotFound {
+		if errors.Is(err, services.ErrUserNotFound) {
 			return SendError(c, NotFound(map[string]string{"msg": "user not found"}))
 		}
 		return SendError(c, InternalServerError())
