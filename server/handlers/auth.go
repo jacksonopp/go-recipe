@@ -33,6 +33,7 @@ func (h *AuthHandler) RegisterRoutes() {
 	h.r.Get("/current", AuthMiddleware(h.db), h.current)
 }
 
+// POST /auth/register
 func (h *AuthHandler) register(c *fiber.Ctx) error {
 	user := struct {
 		Username        string `json:"username"`
@@ -80,6 +81,7 @@ func (h *AuthHandler) register(c *fiber.Ctx) error {
 	return c.Redirect("/login", fiber.StatusPermanentRedirect)
 }
 
+// POST /auth/login
 func (h *AuthHandler) login(c *fiber.Ctx) error {
 	user := struct {
 		Username string `json:"username"`
@@ -122,6 +124,7 @@ func (h *AuthHandler) login(c *fiber.Ctx) error {
 	return c.JSON(u.ToDto())
 }
 
+// GET /auth/session
 func (h *AuthHandler) session(c *fiber.Ctx) error {
 	session := c.Cookies("session")
 	if session == "" {
@@ -139,6 +142,7 @@ func (h *AuthHandler) session(c *fiber.Ctx) error {
 	return c.SendStatus(fiber.StatusOK)
 }
 
+// GET /auth/logout
 func (h *AuthHandler) logout(c *fiber.Ctx) error {
 	session := c.Cookies("session")
 	status := fiber.StatusNoContent
@@ -157,10 +161,11 @@ func (h *AuthHandler) logout(c *fiber.Ctx) error {
 	return c.SendStatus(status)
 }
 
+// GET /auth/current
 func (h *AuthHandler) current(c *fiber.Ctx) error {
 	user, err := getUserFromLocals(c)
 	if err != nil {
 		return SendError(c, Unauthorized())
 	}
-	return c.JSON(user.ToDto())
+	return c.JSON(map[string]any{"username": user.Username, "id": user.ID})
 }

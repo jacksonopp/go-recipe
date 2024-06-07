@@ -32,7 +32,7 @@
       </div>
       <div class="relative">
         <img
-          src="/placeholder.svg"
+          src="http://localhost:9000/go-recipe/unnamed.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=epE6ctF233OEhem3Hvfp%2F20240607%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20240607T193008Z&X-Amz-Expires=86400&X-Amz-SignedHeaders=host&response-content-disposition=attachment%3B%20filename%3D%22unnamed.png%22.png&X-Amz-Signature=bcd34f894f3abf324422225bd718215171360d32f5443a7f19d6ddc39f383c8d"
           alt="Hero RecipeType"
           class="mx-auto h-full w-full rounded-lg object-cover shadow-lg max-w-[640px]"
           width="640"

@@ -23,6 +23,7 @@ func NewUserHandler(r fiber.Router, db *gorm.DB) *UserHandler {
 func (h *UserHandler) RegisterRoutes() {
 	h.r.Get("/:name", h.getUserByName)
 	h.r.Get("/:name/recipes", h.getUserRecipes)
+	h.r.Get("/:name/files", h.getUserFiles)
 }
 
 func (h *UserHandler) getUserByName(c *fiber.Ctx) error {
@@ -61,4 +62,23 @@ func (h *UserHandler) getUserRecipes(c *fiber.Ctx) error {
 		recipesDtos[i] = rdto
 	}
 	return c.JSON(recipesDtos)
+}
+
+// GET /user/:name/files?page={n}&limit={n}
+func (h *UserHandler) getUserFiles(c *fiber.Ctx) error {
+	page, limit := getPaginationParams(c)
+	username := c.Params("name")
+	if username == "" {
+		return SendError(c, BadRequest("username is required"))
+	}
+
+	files, err := h.userService.GetUserFiles(username, page, limit)
+	if err != nil {
+		if errors.Is(err, services.ErrUserNotFound) {
+			return SendError(c, NotFound(map[string]string{"msg": "user not found"}))
+		}
+		return SendError(c, InternalServerError())
+	}
+
+	return c.JSON(files)
 }

@@ -14,6 +14,7 @@ type UserService interface {
 	GetUserById(id uint) (*domain.User, error)
 	GetUserByUsername(name string) (*domain.User, error)
 	GetUsersRecipes(name string, page, limit int) ([]domain.Recipe, error)
+	GetUserFiles(name string, _, _ int) ([]domain.FileDto, error)
 }
 
 type userService struct {
@@ -147,5 +148,46 @@ func (s userService) GetUsersRecipes(name string, page, limit int) ([]domain.Rec
 		return nil, ctx.Err()
 	case val := <-ch:
 		return val.recipes, val.err
+	}
+}
+
+func (s userService) GetUserFiles(name string, _, _ int) ([]domain.FileDto, error) {
+	ctx, cancel := context.WithTimeout(s.ctx, DEFAULT_TIMEOUT)
+	defer cancel()
+
+	type filesVal struct {
+		files []domain.FileDto
+		err   error
+	}
+
+	ch := make(chan filesVal)
+
+	go func() {
+		defer cancel()
+
+		var user domain.User
+
+		err := s.db.Where("username = ?", name).
+			Preload("Files").
+			First(&user).
+			Error
+		if err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				err := ErrUserNotFound
+				ch <- filesVal{files: nil, err: err}
+				return
+			}
+			ch <- filesVal{files: nil, err: err}
+			return
+		}
+
+		ch <- filesVal{files: user.GetFiles(), err: nil}
+	}()
+
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case val := <-ch:
+		return val.files, val.err
 	}
 }

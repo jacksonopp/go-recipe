@@ -7,6 +7,8 @@ import (
 	"github.com/jacksonopp/go-recipe/domain"
 	"github.com/jacksonopp/go-recipe/handlers"
 	"github.com/jacksonopp/go-recipe/services"
+	"github.com/minio/minio-go/v7"
+	"github.com/minio/minio-go/v7/pkg/credentials"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"log"
@@ -20,6 +22,11 @@ func main() {
 		log.Panicf("failed to create database %v", err)
 	}
 
+	minioClient, err := createMino()
+	if err != nil {
+		log.Panicf("failed to create minio client %v", err)
+	}
+
 	app := fiber.New()
 	app.Use(logger.New())
 	api := app.Group("/api")
@@ -28,12 +35,14 @@ func main() {
 	recipeHandler := handlers.NewRecipeHandler(api, db)
 	userHandler := handlers.NewUserHandler(api, db)
 	tagHandler := handlers.NewTagHandler(api, db)
+	fileHandler := handlers.NewFileHandler(api, minioClient, db)
 
 	createApiRoutes(
 		authHandler,
 		recipeHandler,
 		userHandler,
 		tagHandler,
+		fileHandler,
 	)
 
 	sessionService := services.NewSessionService(db)
@@ -86,6 +95,7 @@ func createDb() (*gorm.DB, error) {
 		&domain.Ingredient{},
 		&domain.Instruction{},
 		&domain.Tag{},
+		&domain.File{},
 	)
 	if err != nil {
 		return nil, err
@@ -98,4 +108,17 @@ func createApiRoutes(handlers ...handlers.Handler) {
 	for _, handler := range handlers {
 		handler.RegisterRoutes()
 	}
+}
+
+func createMino() (*minio.Client, error) {
+	endpoint := os.Getenv("MINIO_ENDPOINT")
+	accessKeyID := os.Getenv("MINIO_ACCESS_KEY_ID")
+	secretAccessKey := os.Getenv("MINIO_SECRET_ACCESS_KEY")
+	useSSL := os.Getenv("MINIO_USE_SSL") == "true"
+
+	// Initialize minio client object.
+	return minio.New(endpoint, &minio.Options{
+		Creds:  credentials.NewStaticV4(accessKeyID, secretAccessKey, ""),
+		Secure: useSSL,
+	})
 }

@@ -4,7 +4,6 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/jacksonopp/go-recipe/domain"
 	"gorm.io/gorm"
-	"log"
 )
 
 func AuthMiddleware(db *gorm.DB) fiber.Handler {
@@ -15,20 +14,17 @@ func AuthMiddleware(db *gorm.DB) fiber.Handler {
 		}{}
 
 		if err := c.CookieParser(&sessionCookie); err != nil {
-			log.Println("failed to parse cookie", err)
 			return SendError(c, Unauthorized())
 		}
 
 		token := sessionCookie.Session
 
 		if token == "" {
-			log.Println("no token")
 			return SendError(c, Unauthorized())
 		}
 
 		user, err := getUserBySessionToken(db, token)
 		if err != nil {
-			log.Println("failed to get user", err)
 			return SendError(c, Unauthorized())
 		}
 

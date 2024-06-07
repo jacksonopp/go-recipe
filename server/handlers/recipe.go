@@ -488,14 +488,3 @@ func (h *RecipeHandler) removeTagFromRecipe(c *fiber.Ctx) error {
 
 	return c.SendStatus(fiber.StatusNoContent)
 }
-
-func getUserFromLocals(c *fiber.Ctx) (domain.User, error) {
-	var user domain.User
-	if u, ok := c.Locals("user").(*domain.User); !ok {
-		log.Println("no user")
-		return domain.User{}, Unauthorized()
-	} else {
-		user = *u
-	}
-	return user, nil
-}

@@ -66,4 +66,7 @@ var (
 
 	// ErrSessionExpired is returned when a session has expired
 	ErrSessionExpired = errors.New("session expired")
+
+	// Bucket errors
+	ErrFileNotFound = errors.New("item not found")
 )
