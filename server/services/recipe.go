@@ -14,23 +14,23 @@ type RecipeService interface {
 	// RECIPES
 	CreateRecipe(userID uint, name, description string, ingredients []domain.IngredientDto, instructions []domain.InstructionDto) (*domain.Recipe, error)
 	GetRecipeById(id uint) (*domain.Recipe, error)
-	UpdateRecipe(recipeID uint, name, description string) (*domain.Recipe, error)
-	DeleteRecipe(recipeID uint) error
+	UpdateRecipe(userId, recipeID uint, name, description string) (*domain.Recipe, error)
+	DeleteRecipe(userId, recipeID uint) error
 
 	// INGREDIENTS
-	AddIngredientToRecipe(recipeId uint, name, quantity, unit string) (*domain.Recipe, error)
-	UpdateIngredient(recipeID, ingredientID uint, name, qty, unit string) (*domain.Recipe, error)
-	DeleteIngredient(recipeID, ingredientID uint) error
+	AddIngredientToRecipe(userId, recipeId uint, name, quantity, unit string) (*domain.Recipe, error)
+	UpdateIngredient(userId, recipeID, ingredientID uint, name, qty, unit string) (*domain.Recipe, error)
+	DeleteIngredient(userId, recipeID, ingredientID uint) error
 
 	// INSTRUCTIONS
-	AddInstructionToRecipe(recipeID uint, step int, contents string) (*domain.Recipe, error)
-	UpdateInstruction(recipeID, instructionID uint, contents string) (*domain.Recipe, error)
-	SwapInstructions(recipeID, instructionOneID, instructionTwoID uint) (*domain.Recipe, error)
-	DeleteInstruction(recipeID, instructionID uint) error
+	AddInstructionToRecipe(userID uint, recipeID uint, step int, contents string) (*domain.Recipe, error)
+	UpdateInstruction(userID, recipeID, instructionID uint, contents string) (*domain.Recipe, error)
+	SwapInstructions(userID, recipeID, instructionOneID, instructionTwoID uint) (*domain.Recipe, error)
+	DeleteInstruction(userID, recipeID, instructionID uint) error
 
 	//	TAGS
-	AddTagToRecipe(recipeID uint, tagId uint) (*domain.Recipe, error)
-	RemoveTagFromRecipe(recipeID uint, tagId uint) error
+	AddTagToRecipe(userID uint, recipeID uint, tagId uint) (*domain.Recipe, error)
+	RemoveTagFromRecipe(userID uint, recipeID uint, tagID uint) error
 }
 
 type recipeService struct {
@@ -143,136 +143,8 @@ func (r *recipeService) CreateRecipe(userID uint, name, description string, ingr
 	}
 }
 
-// GetRecipeById returns the recipe with the given ID.
-func (r *recipeService) GetRecipeById(id uint) (*domain.Recipe, error) {
-	return getRecipeByIdWithTx(r.ctx, r.db, id)
-}
-
-// DeleteRecipe deletes the recipe with the given ID.
-func (r *recipeService) DeleteRecipe(recipeID uint) error {
-	ctx, cancel := context.WithTimeout(r.ctx, 5*time.Second)
-	defer cancel()
-	errCh := make(chan error)
-
-	go func() {
-		defer cancel()
-		tx := r.db.Begin()
-		defer recoverTx(tx)
-
-		err := tx.Delete(&domain.Recipe{}, recipeID).Error
-		if err != nil {
-			log.Println("error deleting recipe", err)
-			tx.Rollback()
-			// error deleting recipe
-			errCh <- ErrUnknown
-			return
-		}
-		err = tx.Delete(&domain.Ingredient{}, "recipe_id = ?", recipeID).Error
-		if err != nil {
-			log.Println("error deleting ingredients", err)
-			tx.Rollback()
-			// error deleting ingredients
-			errCh <- ErrUnknown
-			return
-		}
-		err = tx.Delete(&domain.Instruction{}, "recipe_id = ?", recipeID).Error
-		if err != nil {
-			log.Println("error deleting instructions", err)
-			tx.Rollback()
-			// error deleting instructions
-			errCh <- ErrUnknown
-			return
-		}
-		err = tx.Commit().Error
-		if err != nil {
-			log.Println("error committing transaction", err)
-			errCh <- ErrCommit
-			return
-		}
-	}()
-
-	select {
-	case err := <-errCh:
-		return err
-	case <-ctx.Done():
-		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-			return ErrTimeout
-		}
-		return nil
-	}
-}
-
-// INGREDIENTS
-
-// AddIngredientToRecipe adds an ingredient to the recipe with the given ID.
-func (r *recipeService) AddIngredientToRecipe(recipeID uint, name, quantity, unit string) (*domain.Recipe, error) {
-	ctx, cancel := context.WithTimeout(r.ctx, 5*time.Second)
-	defer cancel()
-	ch := make(chan recipeVal)
-
-	go func() {
-		defer cancel()
-		tx := r.db.Begin()
-		defer recoverTx(tx)
-
-		err := tx.Create(&domain.Ingredient{
-			Name:     name,
-			Quantity: quantity,
-			Unit:     unit,
-			RecipeID: recipeID,
-		}).Error
-		if err != nil {
-			log.Println("error creating ingredient", err)
-			tx.Rollback()
-			ch <- recipeVal{
-				nil,
-				ErrUnknown,
-			}
-			return
-		}
-		recipe, err := getRecipeByIdWithTx(r.ctx, tx, recipeID)
-		if err != nil {
-			if errors.Is(err, gorm.ErrRecordNotFound) {
-				ch <- recipeVal{
-					nil,
-					ErrRecipeNotFound,
-				}
-				return
-			}
-			log.Println("error getting recipe", err)
-			tx.Rollback()
-			ch <- recipeVal{
-				nil,
-				ErrUnknown,
-			}
-			return
-		}
-		if err := tx.Commit().Error; err != nil {
-			log.Println("error committing transaction", err)
-			ch <- recipeVal{
-				nil,
-				ErrCommit,
-			}
-			return
-		}
-		ch <- recipeVal{recipe, nil}
-	}()
-
-	//return recipe, nil
-	select {
-	case v := <-ch:
-		return v.recipe, v.err
-	case <-ctx.Done():
-		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-			return nil, ErrTimeout
-		} else {
-			return nil, ErrTimeoutNoMessage
-		}
-	}
-}
-
 // UpdateRecipe updates the recipe with the given ID.
-func (r *recipeService) UpdateRecipe(recipeID uint, name, description string) (*domain.Recipe, error) {
+func (r *recipeService) UpdateRecipe(userId, recipeID uint, name, description string) (*domain.Recipe, error) {
 	ctx, cancel := context.WithTimeout(r.ctx, 5*time.Second)
 
 	defer cancel()
@@ -285,6 +157,15 @@ func (r *recipeService) UpdateRecipe(recipeID uint, name, description string) (*
 
 		recipe, err := getRecipeByIdWithTx(r.ctx, tx, recipeID)
 		if err != nil {
+			tx.Rollback()
+			ch <- recipeVal{
+				nil,
+				err,
+			}
+			return
+		}
+
+		if err = doesUserOwnRecipe(userId, recipe.UserID); err != nil {
 			tx.Rollback()
 			ch <- recipeVal{
 				nil,
@@ -335,8 +216,163 @@ func (r *recipeService) UpdateRecipe(recipeID uint, name, description string) (*
 	}
 }
 
+// GetRecipeById returns the recipe with the given ID.
+func (r *recipeService) GetRecipeById(id uint) (*domain.Recipe, error) {
+	return getRecipeByIdWithTx(r.ctx, r.db, id)
+}
+
+// DeleteRecipe deletes the recipe with the given ID.
+func (r *recipeService) DeleteRecipe(userId, recipeID uint) error {
+	ctx, cancel := context.WithTimeout(r.ctx, DEFAULT_TIMEOUT)
+	defer cancel()
+	errCh := make(chan error)
+
+	go func() {
+		defer cancel()
+		tx := r.db.Begin()
+		defer recoverTx(tx)
+
+		recipe, err := getRecipeByIdWithTx(r.ctx, tx, recipeID)
+		if err != nil {
+			tx.Rollback()
+			errCh <- err
+		}
+		if err = doesUserOwnRecipe(userId, recipe.UserID); err != nil {
+			tx.Rollback()
+			errCh <- err
+			return
+		}
+
+		err = tx.Where("user_id = ?", userId).Delete(&domain.Recipe{}, recipeID).Error
+		if err != nil {
+			log.Println("error deleting recipe", err)
+			tx.Rollback()
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				errCh <- ErrUnauthorized
+				return
+			}
+			// error deleting recipe
+			errCh <- ErrUnknown
+			return
+		}
+
+		err = tx.Delete(&domain.Ingredient{}, "recipe_id = ?", recipeID).Error
+		if err != nil {
+			log.Println("error deleting ingredients", err)
+			tx.Rollback()
+			// error deleting ingredients
+			errCh <- ErrUnknown
+			return
+		}
+		err = tx.Delete(&domain.Instruction{}, "recipe_id = ?", recipeID).Error
+		if err != nil {
+			log.Println("error deleting instructions", err)
+			tx.Rollback()
+			// error deleting instructions
+			errCh <- ErrUnknown
+			return
+		}
+		err = tx.Commit().Error
+		if err != nil {
+			log.Println("error committing transaction", err)
+			errCh <- ErrCommit
+			return
+		}
+	}()
+
+	select {
+	case err := <-errCh:
+		return err
+	case <-ctx.Done():
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			return ErrTimeout
+		}
+		return nil
+	}
+}
+
+// INGREDIENTS
+
+// AddIngredientToRecipe adds an ingredient to the recipe with the given ID.
+func (r *recipeService) AddIngredientToRecipe(userId, recipeID uint, name, quantity, unit string) (*domain.Recipe, error) {
+	ctx, cancel := context.WithTimeout(r.ctx, 5*time.Second)
+	defer cancel()
+	ch := make(chan recipeVal)
+
+	go func() {
+		defer cancel()
+		tx := r.db.Begin()
+		defer recoverTx(tx)
+
+		recipe, err := getRecipeByIdWithTx(r.ctx, tx, recipeID)
+		if err != nil {
+			tx.Rollback()
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				ch <- recipeVal{
+					nil,
+					ErrRecipeNotFound,
+				}
+				return
+			}
+			log.Println("error getting recipe", err)
+			ch <- recipeVal{
+				nil,
+				ErrUnknown,
+			}
+			return
+		}
+
+		if err = doesUserOwnRecipe(userId, recipe.UserID); err != nil {
+			tx.Rollback()
+			ch <- recipeVal{
+				nil,
+				err,
+			}
+			return
+		}
+
+		err = tx.Create(&domain.Ingredient{
+			Name:     name,
+			Quantity: quantity,
+			Unit:     unit,
+			RecipeID: recipeID,
+		}).Error
+		if err != nil {
+			log.Println("error creating ingredient", err)
+			tx.Rollback()
+			ch <- recipeVal{
+				nil,
+				ErrUnknown,
+			}
+			return
+		}
+
+		if err := tx.Commit().Error; err != nil {
+			log.Println("error committing transaction", err)
+			ch <- recipeVal{
+				nil,
+				ErrCommit,
+			}
+			return
+		}
+		ch <- recipeVal{recipe, nil}
+	}()
+
+	//return recipe, nil
+	select {
+	case v := <-ch:
+		return v.recipe, v.err
+	case <-ctx.Done():
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			return nil, ErrTimeout
+		} else {
+			return nil, ErrTimeoutNoMessage
+		}
+	}
+}
+
 // UpdateIngredient updates the ingredient with the given ID.
-func (r *recipeService) UpdateIngredient(recipeID, ingredientID uint, name, qty, unit string) (*domain.Recipe, error) {
+func (r *recipeService) UpdateIngredient(userId, recipeID, ingredientID uint, name, qty, unit string) (*domain.Recipe, error) {
 	ctx, cancel := context.WithTimeout(r.ctx, 5*time.Second)
 	defer cancel()
 	ch := make(chan recipeVal)
@@ -411,6 +447,15 @@ func (r *recipeService) UpdateIngredient(recipeID, ingredientID uint, name, qty,
 			return
 		}
 
+		if err := doesUserOwnRecipe(userId, recipe.UserID); err != nil {
+			tx.Rollback()
+			ch <- recipeVal{
+				nil,
+				err,
+			}
+			return
+		}
+
 		err = tx.Commit().Error
 		if err != nil {
 			log.Println("error getting recipe", err)
@@ -434,9 +479,9 @@ func (r *recipeService) UpdateIngredient(recipeID, ingredientID uint, name, qty,
 	}
 }
 
-// DeleteIngredient deletes the ingredient with the given ID.
-func (r *recipeService) DeleteIngredient(recipeID, ingredientID uint) error {
-	ctx, cancel := context.WithTimeout(r.ctx, 5*time.Second)
+// DeleteIngredient deletes the ingredient with the given ID from a recipe.
+func (r *recipeService) DeleteIngredient(userId, recipeID, ingredientID uint) error {
+	ctx, cancel := context.WithTimeout(r.ctx, DEFAULT_TIMEOUT)
 	errCh := make(chan error)
 
 	go func() {
@@ -447,7 +492,18 @@ func (r *recipeService) DeleteIngredient(recipeID, ingredientID uint) error {
 
 		var ingredient domain.Ingredient
 
-		err := tx.First(&ingredient, ingredientID).Error
+		recipe, err := getRecipeByIdWithTx(r.ctx, tx, recipeID)
+		if err != nil {
+			tx.Rollback()
+			errCh <- err
+		}
+		if err = doesUserOwnRecipe(userId, recipe.UserID); err != nil {
+			tx.Rollback()
+			errCh <- err
+			return
+		}
+
+		err = tx.First(&ingredient, ingredientID).Error
 		if err != nil {
 			log.Println("error getting ingredient", err)
 			tx.Rollback()
@@ -496,7 +552,7 @@ func (r *recipeService) DeleteIngredient(recipeID, ingredientID uint) error {
 // INSTRUCTIONS
 
 // AddInstructionToRecipe adds an instruction to the recipe with the given ID.
-func (r *recipeService) AddInstructionToRecipe(recipeID uint, step int, contents string) (*domain.Recipe, error) {
+func (r *recipeService) AddInstructionToRecipe(userID uint, recipeID uint, step int, contents string) (*domain.Recipe, error) {
 	ctx, cancel := context.WithTimeout(r.ctx, 5*time.Second)
 	defer cancel()
 	ch := make(chan recipeVal)
@@ -533,6 +589,15 @@ func (r *recipeService) AddInstructionToRecipe(recipeID uint, step int, contents
 			return
 		}
 
+		if err := doesUserOwnRecipe(userID, recipe.UserID); err != nil {
+			tx.Rollback()
+			ch <- recipeVal{
+				nil,
+				err,
+			}
+			return
+		}
+
 		err = tx.Commit().Error
 		if err != nil {
 			log.Println("error getting recipe", err)
@@ -558,7 +623,7 @@ func (r *recipeService) AddInstructionToRecipe(recipeID uint, step int, contents
 }
 
 // UpdateInstruction updates the instruction with the given ID.
-func (r *recipeService) UpdateInstruction(recipeID, instructionID uint, contents string) (*domain.Recipe, error) {
+func (r *recipeService) UpdateInstruction(userID, recipeID, instructionID uint, contents string) (*domain.Recipe, error) {
 	ctx, cancel := context.WithTimeout(r.ctx, 5*time.Second)
 	defer cancel()
 	ch := make(chan recipeVal)
@@ -618,6 +683,15 @@ func (r *recipeService) UpdateInstruction(recipeID, instructionID uint, contents
 			return
 		}
 
+		if err := doesUserOwnRecipe(userID, recipe.UserID); err != nil {
+			tx.Rollback()
+			ch <- recipeVal{
+				nil,
+				err,
+			}
+			return
+		}
+
 		err = tx.Commit().Error
 		if err != nil {
 			log.Println("error getting recipe", err)
@@ -643,13 +717,12 @@ func (r *recipeService) UpdateInstruction(recipeID, instructionID uint, contents
 }
 
 // SwapInstructions swaps the positions of two instructions.
-func (r *recipeService) SwapInstructions(recipeID, instructionOneID, instructionTwoID uint) (*domain.Recipe, error) {
+func (r *recipeService) SwapInstructions(userID, recipeID, instructionOneID, instructionTwoID uint) (*domain.Recipe, error) {
 	ctx, cancel := context.WithTimeout(r.ctx, 5*time.Second)
 	defer cancel()
 	ch := make(chan recipeVal)
 
 	go func() {
-
 		tx := r.db.Begin()
 		defer recoverTx(tx)
 
@@ -724,6 +797,15 @@ func (r *recipeService) SwapInstructions(recipeID, instructionOneID, instruction
 			return
 		}
 
+		if err := doesUserOwnRecipe(userID, recipe.UserID); err != nil {
+			tx.Rollback()
+			ch <- recipeVal{
+				nil,
+				err,
+			}
+			return
+		}
+
 		err = tx.Commit().Error
 		if err != nil {
 			log.Println("error getting recipe", err)
@@ -749,7 +831,7 @@ func (r *recipeService) SwapInstructions(recipeID, instructionOneID, instruction
 }
 
 // DeleteInstruction deletes the instruction with the given ID.
-func (r *recipeService) DeleteInstruction(recipeID, instructionID uint) error {
+func (r *recipeService) DeleteInstruction(userID, recipeID, instructionID uint) error {
 	ctx, cancel := context.WithTimeout(r.ctx, 5*time.Second)
 	defer cancel()
 	errCh := make(chan error)
@@ -762,7 +844,18 @@ func (r *recipeService) DeleteInstruction(recipeID, instructionID uint) error {
 
 		var instruction domain.Instruction
 
-		err := tx.First(&instruction, instructionID).Error
+		recipe, err := getRecipeByIdWithTx(r.ctx, tx, recipeID)
+		if err != nil {
+			tx.Rollback()
+			errCh <- err
+		}
+		if err = doesUserOwnRecipe(userID, recipe.UserID); err != nil {
+			tx.Rollback()
+			errCh <- err
+			return
+		}
+
+		err = tx.First(&instruction, instructionID).Error
 		if err != nil {
 			log.Println("error getting instruction", err)
 			tx.Rollback()
@@ -807,7 +900,7 @@ func (r *recipeService) DeleteInstruction(recipeID, instructionID uint) error {
 
 // AddTagToRecipe adds a tag to the recipe with the given ID.
 // It also adds the recipe to the tag.
-func (r *recipeService) AddTagToRecipe(recipeID, tagID uint) (*domain.Recipe, error) {
+func (r *recipeService) AddTagToRecipe(userID uint, recipeID uint, tagID uint) (*domain.Recipe, error) {
 	ctx, cancel := context.WithTimeout(r.ctx, DEFAULT_TIMEOUT)
 	defer cancel()
 	ch := make(chan recipeVal)
@@ -825,6 +918,15 @@ func (r *recipeService) AddTagToRecipe(recipeID, tagID uint) (*domain.Recipe, er
 			ch <- recipeVal{
 				nil,
 				ErrUnknown,
+			}
+			return
+		}
+
+		if err = doesUserOwnRecipe(userID, recipe.UserID); err != nil {
+			tx.Rollback()
+			ch <- recipeVal{
+				nil,
+				err,
 			}
 			return
 		}
@@ -910,7 +1012,7 @@ func (r *recipeService) AddTagToRecipe(recipeID, tagID uint) (*domain.Recipe, er
 
 // RemoveTagFromRecipe removes a tag from the recipe with the given ID.
 // It also removes the recipe from the tag.
-func (r *recipeService) RemoveTagFromRecipe(recipeID, tagID uint) error {
+func (r *recipeService) RemoveTagFromRecipe(userID uint, recipeID uint, tagID uint) error {
 	ctx, cancel := context.WithTimeout(r.ctx, DEFAULT_TIMEOUT)
 	defer cancel()
 	errCh := make(chan error)
@@ -920,7 +1022,20 @@ func (r *recipeService) RemoveTagFromRecipe(recipeID, tagID uint) error {
 		tx := r.db.Begin()
 		defer recoverTx(tx)
 
-		err := tx.Model(&domain.Recipe{}).
+		recipe, err := getRecipeByIdWithTx(r.ctx, tx, recipeID)
+		if err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				errCh <- ErrRecipeNotFound
+				return
+			}
+			errCh <- ErrUnknown
+		}
+		if err = doesUserOwnRecipe(userID, recipe.UserID); err != nil {
+			errCh <- err
+			return
+		}
+
+		err = tx.Model(&domain.Recipe{}).
 			Where("id = ?", recipeID).
 			Association("Tags").
 			Delete(&domain.Tag{}, tagID)
@@ -1020,4 +1135,11 @@ func getRecipeByIdWithTx(ctx context.Context, tx *gorm.DB, id uint) (*domain.Rec
 		}
 		return nil, ErrTimeoutNoMessage
 	}
+}
+
+func doesUserOwnRecipe(userId, recipeId uint) error {
+	if userId != recipeId {
+		return ErrUnauthorized
+	}
+	return nil
 }

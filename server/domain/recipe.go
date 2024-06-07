@@ -26,6 +26,7 @@ type RecipeDto struct {
 	Ingredients  []Dto       `json:"ingredients"`
 	Instructions []Dto       `json:"instructions"`
 	Tags         []simpleTag `json:"tags"`
+	UserID       uint        `json:"user"`
 }
 
 type simpleTag struct {
@@ -61,6 +62,7 @@ func (r *Recipe) ToDto() Dto {
 		Ingredients:  ingredients,
 		Instructions: instructions,
 		Tags:         tags,
+		UserID:       r.UserID,
 	}
 }
 

@@ -43,6 +43,7 @@ func getUserBySessionToken(db *gorm.DB, token string) (*domain.User, error) {
 	err := db.Table("users").
 		Joins("inner join sessions on users.id = sessions.user_id").
 		Where("sessions.token = ?", token).
+		Where("sessions.deleted_at is null").
 		First(&user).
 		Error
 	return &user, err

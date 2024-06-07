@@ -116,6 +116,11 @@ func (h *RecipeHandler) getRecipeById(c *fiber.Ctx) error {
 
 // PATCH /recipe/:id
 func (h *RecipeHandler) updateRecipe(c *fiber.Ctx) error {
+	user, err := getUserFromLocals(c)
+	if err != nil {
+		return SendError(c, err.(APIError))
+	}
+
 	id, err := strconv.Atoi(c.Params("id"))
 	if err != nil {
 		return SendError(c, BadRequest("id must be an integer"))
@@ -136,10 +141,14 @@ func (h *RecipeHandler) updateRecipe(c *fiber.Ctx) error {
 		return SendError(c, err)
 	}
 
-	recipe, err := h.recipeService.UpdateRecipe(uint(id), r.Name, r.Description)
+	recipe, err := h.recipeService.UpdateRecipe(user.ID, uint(id), r.Name, r.Description)
 	if err != nil {
-		log.Println("error updating recipe", err)
-		//TODO handle not found error
+		if errors.Is(err, services.ErrRecipeNotFound) {
+			return SendError(c, NotFound(map[string]string{"error": "recipe not found"}))
+		}
+		if errors.Is(err, services.ErrUnauthorized) {
+			return SendError(c, Unauthorized())
+		}
 		return SendError(c, InternalServerError())
 	}
 
@@ -148,13 +157,21 @@ func (h *RecipeHandler) updateRecipe(c *fiber.Ctx) error {
 
 // DELETE /recipe/:id
 func (h *RecipeHandler) deleteRecipe(c *fiber.Ctx) error {
+	user, err := getUserFromLocals(c)
+	if err != nil {
+		return SendError(c, err.(APIError))
+	}
+
 	id, err := strconv.Atoi(c.Params("id"))
 	if err != nil {
 		return SendError(c, BadRequest("id must be an integer"))
 	}
 
-	err = h.recipeService.DeleteRecipe(uint(id))
+	err = h.recipeService.DeleteRecipe(user.ID, uint(id))
 	if err != nil {
+		if errors.Is(err, services.ErrUnauthorized) {
+			return SendError(c, Unauthorized())
+		}
 		return SendError(c, InternalServerError())
 	}
 
@@ -165,6 +182,11 @@ func (h *RecipeHandler) deleteRecipe(c *fiber.Ctx) error {
 
 // POST /recipe/:id/ingredient
 func (h *RecipeHandler) createIngredient(c *fiber.Ctx) error {
+	user, err := getUserFromLocals(c)
+	if err != nil {
+		return SendError(c, err.(APIError))
+	}
+
 	id, err := strconv.Atoi(c.Params("id"))
 	if err != nil {
 		return SendError(c, BadRequest("id must be an integer"))
@@ -186,7 +208,7 @@ func (h *RecipeHandler) createIngredient(c *fiber.Ctx) error {
 		return SendError(c, err)
 	}
 
-	recipe, err := h.recipeService.AddIngredientToRecipe(uint(id), ingredient.Name, ingredient.Quantity, ingredient.Unit)
+	recipe, err := h.recipeService.AddIngredientToRecipe(user.ID, uint(id), ingredient.Name, ingredient.Quantity, ingredient.Unit)
 	if err != nil {
 		if errors.Is(err, services.ErrRecipeNotFound) {
 			return SendError(c, NotFound(map[string]string{"error": "recipe not found"}))
@@ -200,6 +222,10 @@ func (h *RecipeHandler) createIngredient(c *fiber.Ctx) error {
 
 // PATCH /recipe/:id/ingredient/:ingredientId
 func (h *RecipeHandler) updateIngredient(c *fiber.Ctx) error {
+	user, err := getUserFromLocals(c)
+	if err != nil {
+		return SendError(c, err.(APIError))
+	}
 	recipeID, err := strconv.Atoi(c.Params("id"))
 	if err != nil {
 		return SendError(c, BadRequest("id must be an integer"))
@@ -226,15 +252,12 @@ func (h *RecipeHandler) updateIngredient(c *fiber.Ctx) error {
 		return SendError(c, err)
 	}
 
-	recipe, err := h.recipeService.UpdateIngredient(
-		uint(recipeID),
-		uint(ingredientID),
-		ingredient.Name,
-		ingredient.Quantity,
-		ingredient.Unit,
-	)
+	recipe, err := h.recipeService.UpdateIngredient(user.ID, uint(recipeID), uint(ingredientID), ingredient.Name, ingredient.Quantity, ingredient.Unit)
 	if err != nil {
 		log.Println("error updating ingredient", err)
+		if errors.Is(err, services.ErrUnauthorized) {
+			return SendError(c, Unauthorized())
+		}
 		return SendError(c, InternalServerError())
 	}
 
@@ -243,6 +266,11 @@ func (h *RecipeHandler) updateIngredient(c *fiber.Ctx) error {
 
 // DELETE /recipe/:id/ingredient/:ingredientId
 func (h *RecipeHandler) deleteIngredient(c *fiber.Ctx) error {
+	user, err := getUserFromLocals(c)
+	if err != nil {
+		return SendError(c, err.(APIError))
+	}
+
 	log.Println("delete ingredient")
 	recipeID, err := strconv.Atoi(c.Params("id"))
 	if err != nil {
@@ -256,13 +284,16 @@ func (h *RecipeHandler) deleteIngredient(c *fiber.Ctx) error {
 
 	log.Println(recipeID, ingredientID)
 
-	err = h.recipeService.DeleteIngredient(uint(recipeID), uint(ingredientID))
+	err = h.recipeService.DeleteIngredient(user.ID, uint(recipeID), uint(ingredientID))
 	if err != nil {
 		if errors.Is(err, services.ErrRecipeNotFound) {
 			return SendError(c, NotFound(map[string]string{"error": "recipe not found"}))
 		}
 		if errors.Is(err, services.ErrIngredientConflict) {
 			return SendError(c, Conflict(map[string]string{"error": "ingredient does not belong to recipe"}))
+		}
+		if errors.Is(err, services.ErrUnauthorized) {
+			return SendError(c, Unauthorized())
 		}
 		log.Println("error deleting ingredient", err)
 		return SendError(c, InternalServerError())
@@ -275,6 +306,11 @@ func (h *RecipeHandler) deleteIngredient(c *fiber.Ctx) error {
 
 // POST /recipe
 func (h *RecipeHandler) createInstruction(c *fiber.Ctx) error {
+	user, err := getUserFromLocals(c)
+	if err != nil {
+		return SendError(c, err.(APIError))
+	}
+
 	id, err := strconv.Atoi(c.Params("id"))
 	if err != nil {
 		return SendError(c, BadRequest("id must be an integer"))
@@ -295,7 +331,7 @@ func (h *RecipeHandler) createInstruction(c *fiber.Ctx) error {
 		return SendError(c, err)
 	}
 
-	recipe, err := h.recipeService.AddInstructionToRecipe(uint(id), instruction.Step, instruction.Contents)
+	recipe, err := h.recipeService.AddInstructionToRecipe(user.ID, uint(id), instruction.Step, instruction.Contents)
 	if err != nil {
 		log.Println("error creating instruction", err)
 		return SendError(c, InternalServerError())
@@ -306,6 +342,10 @@ func (h *RecipeHandler) createInstruction(c *fiber.Ctx) error {
 
 // PATCH /recipe/:id/instruction/:instructionId
 func (h *RecipeHandler) updateInstruction(c *fiber.Ctx) error {
+	user, err := getUserFromLocals(c)
+	if err != nil {
+		return SendError(c, err.(APIError))
+	}
 	recipeID, err := strconv.Atoi(c.Params("id"))
 	if err != nil {
 		return SendError(c, BadRequest("id must be an integer"))
@@ -330,7 +370,7 @@ func (h *RecipeHandler) updateInstruction(c *fiber.Ctx) error {
 		return SendError(c, err)
 	}
 
-	recipe, err := h.recipeService.UpdateInstruction(uint(recipeID), uint(instructionID), instruction.Contents)
+	recipe, err := h.recipeService.UpdateInstruction(user.ID, uint(recipeID), uint(instructionID), instruction.Contents)
 	if err != nil {
 		log.Println("error updating instruction", err)
 		return SendError(c, InternalServerError())
@@ -341,6 +381,10 @@ func (h *RecipeHandler) updateInstruction(c *fiber.Ctx) error {
 
 // PATCH /recipe/:id/instruction/:instructionOneId/:instructionTwoId
 func (h *RecipeHandler) swapInstructions(c *fiber.Ctx) error {
+	user, err := getUserFromLocals(c)
+	if err != nil {
+		return SendError(c, err.(APIError))
+	}
 	recipeID, err := strconv.Atoi(c.Params("id"))
 	if err != nil {
 		return SendError(c, BadRequest("id must be an integer"))
@@ -356,7 +400,7 @@ func (h *RecipeHandler) swapInstructions(c *fiber.Ctx) error {
 		return SendError(c, BadRequest("instructionTwoId must be an integer"))
 	}
 
-	recipe, err := h.recipeService.SwapInstructions(uint(recipeID), uint(instructionOneID), uint(instructionTwoID))
+	recipe, err := h.recipeService.SwapInstructions(user.ID, uint(recipeID), uint(instructionOneID), uint(instructionTwoID))
 	if err != nil {
 		log.Println("error swapping instructions", err)
 		return SendError(c, InternalServerError())
@@ -367,6 +411,10 @@ func (h *RecipeHandler) swapInstructions(c *fiber.Ctx) error {
 
 // DELETE /recipe/:id/instruction/:instructionId
 func (h *RecipeHandler) deleteInstruction(c *fiber.Ctx) error {
+	user, err := getUserFromLocals(c)
+	if err != nil {
+		return SendError(c, err.(APIError))
+	}
 	id, err := strconv.Atoi(c.Params("id"))
 	if err != nil {
 		return SendError(c, BadRequest("id must be an integer"))
@@ -377,7 +425,7 @@ func (h *RecipeHandler) deleteInstruction(c *fiber.Ctx) error {
 		return SendError(c, BadRequest("instructionId must be an integer"))
 	}
 
-	err = h.recipeService.DeleteInstruction(uint(id), uint(instructionId))
+	err = h.recipeService.DeleteInstruction(user.ID, uint(id), uint(instructionId))
 	if err != nil {
 		return SendError(c, InternalServerError())
 	}
@@ -388,6 +436,11 @@ func (h *RecipeHandler) deleteInstruction(c *fiber.Ctx) error {
 // TAGS
 // PATCH /recipe/:recipeId/tag/:tagId
 func (h *RecipeHandler) addTagToRecipe(c *fiber.Ctx) error {
+	user, err := getUserFromLocals(c)
+	if err != nil {
+		return SendError(c, err.(APIError))
+	}
+
 	recipeId, err := strconv.Atoi(c.Params("recipeId"))
 	if err != nil {
 		return SendError(c, BadRequest("id must be an integer"))
@@ -398,7 +451,7 @@ func (h *RecipeHandler) addTagToRecipe(c *fiber.Ctx) error {
 		return SendError(c, BadRequest("invalid request body"))
 	}
 
-	recipe, err := h.recipeService.AddTagToRecipe(uint(recipeId), uint(tagId))
+	recipe, err := h.recipeService.AddTagToRecipe(user.ID, uint(recipeId), uint(tagId))
 	if err != nil {
 		return SendError(c, InternalServerError())
 	}
@@ -408,6 +461,10 @@ func (h *RecipeHandler) addTagToRecipe(c *fiber.Ctx) error {
 
 // DELETE /recipe/:recipeId/tag/:tagId
 func (h *RecipeHandler) removeTagFromRecipe(c *fiber.Ctx) error {
+	user, err := getUserFromLocals(c)
+	if err != nil {
+		return SendError(c, err.(APIError))
+	}
 	recipeId, err := strconv.Atoi(c.Params("recipeId"))
 	if err != nil {
 		return SendError(c, BadRequest("id must be an integer"))
@@ -418,7 +475,7 @@ func (h *RecipeHandler) removeTagFromRecipe(c *fiber.Ctx) error {
 		return SendError(c, BadRequest("invalid request body"))
 	}
 
-	err = h.recipeService.RemoveTagFromRecipe(uint(recipeId), uint(tagId))
+	err = h.recipeService.RemoveTagFromRecipe(user.ID, uint(recipeId), uint(tagId))
 	if err != nil {
 		if errors.Is(err, services.ErrRecipeNotFound) {
 			return SendError(c, NotFound(map[string]string{"error": "recipe not found"}))

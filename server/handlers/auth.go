@@ -13,6 +13,7 @@ type AuthHandler struct {
 	r              fiber.Router
 	authService    services.AuthService
 	sessionService services.SessionService
+	db             *gorm.DB
 }
 
 func NewAuthHandler(r fiber.Router, db *gorm.DB) *AuthHandler {
@@ -21,7 +22,7 @@ func NewAuthHandler(r fiber.Router, db *gorm.DB) *AuthHandler {
 
 	subpath := r.Group("/auth")
 
-	return &AuthHandler{r: subpath, authService: authService, sessionService: sessionService}
+	return &AuthHandler{r: subpath, authService: authService, sessionService: sessionService, db: db}
 }
 
 func (h *AuthHandler) RegisterRoutes() {
@@ -29,6 +30,7 @@ func (h *AuthHandler) RegisterRoutes() {
 	h.r.Post("/login", h.login)
 	h.r.Get("/session", h.session)
 	h.r.Get("/logout", h.logout)
+	h.r.Get("/current", AuthMiddleware(h.db), h.current)
 }
 
 func (h *AuthHandler) register(c *fiber.Ctx) error {
@@ -153,4 +155,12 @@ func (h *AuthHandler) logout(c *fiber.Ctx) error {
 	c.ClearCookie("session")
 
 	return c.SendStatus(status)
+}
+
+func (h *AuthHandler) current(c *fiber.Ctx) error {
+	user, err := getUserFromLocals(c)
+	if err != nil {
+		return SendError(c, Unauthorized())
+	}
+	return c.JSON(user.ToDto())
 }

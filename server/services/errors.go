@@ -17,6 +17,9 @@ var (
 	// ErrCommit is returned when a transaction commit fails
 	ErrCommit = errors.New("commit error")
 
+	// ErrUnauthorized is returned when a user is not authorized
+	ErrUnauthorized = errors.New("unauthorized")
+
 	// Auth errors
 
 	// ErrUserAlreadyExists is returned when a user already exists
