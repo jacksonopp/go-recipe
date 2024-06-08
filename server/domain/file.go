@@ -11,6 +11,7 @@ type File struct {
 	Url       string    `gorm:"not null"`
 	UrlExpiry time.Time `gorm:"not null"`
 	UserID    uint      `gorm:"not null"`
+	//RecipeID uint `gorm:""`
 }
 
 type FileDto struct {

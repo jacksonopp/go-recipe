@@ -15,6 +15,7 @@ type Recipe struct {
 	Ingredients  []Ingredient  `gorm:"foreignKey:RecipeID"`
 	Instructions []Instruction `gorm:"foreignKey:RecipeID"`
 	Tags         []*Tag        `gorm:"many2many:recipe_tags"`
+	//HeroImage    File          `gorm:"foreignKey:RecipeID"`
 }
 
 // RecipeDto is a DTO for a Recipe.
@@ -27,6 +28,7 @@ type RecipeDto struct {
 	Instructions []Dto       `json:"instructions"`
 	Tags         []simpleTag `json:"tags"`
 	UserID       uint        `json:"user"`
+	//HeroImage    FileDto     `json:"hero_image"`
 }
 
 type simpleTag struct {
@@ -63,6 +65,7 @@ func (r *Recipe) ToDto() Dto {
 		Instructions: instructions,
 		Tags:         tags,
 		UserID:       r.UserID,
+		//HeroImage:    r.HeroImage.ToDto().(FileDto),
 	}
 }
 
