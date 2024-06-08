@@ -8,9 +8,10 @@ import (
 // Recipe represents a recipe in the system.
 type Recipe struct {
 	gorm.Model
-	Name        string `gorm:"not null"`
-	Description string
-	// UserID is the ID of the user who created the recipe.
+	Name         string `gorm:"not null"`
+	Description  string
+	CookTime     string
+	Servings     int           `gorm:"default:1"`
 	UserID       uint          `json:"user_id"`
 	Ingredients  []Ingredient  `gorm:"foreignKey:RecipeID"`
 	Instructions []Instruction `gorm:"foreignKey:RecipeID"`
@@ -24,6 +25,8 @@ type RecipeDto struct {
 	CreatedAt    time.Time   `json:"created_at"`
 	Name         string      `json:"name"`
 	Description  string      `json:"description"`
+	CookTime     string      `json:"cook_time"`
+	Servings     int         `json:"servings"`
 	Ingredients  []Dto       `json:"ingredients"`
 	Instructions []Dto       `json:"instructions"`
 	Tags         []simpleTag `json:"tags"`
@@ -61,6 +64,8 @@ func (r *Recipe) ToDto() Dto {
 		CreatedAt:    r.CreatedAt,
 		Name:         r.Name,
 		Description:  r.Description,
+		Servings:     r.Servings,
+		CookTime:     r.CookTime,
 		Ingredients:  ingredients,
 		Instructions: instructions,
 		Tags:         tags,

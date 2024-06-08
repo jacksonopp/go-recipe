@@ -62,6 +62,8 @@ func (h *RecipeHandler) createRecipe(c *fiber.Ctx) error {
 		Description  string                  `json:"description"`
 		Ingredients  []domain.IngredientDto  `json:"ingredients"`
 		Instructions []domain.InstructionDto `json:"instructions"`
+		Servings     int                     `json:"servings"`
+		CookTime     string                  `json:"cook_time"`
 		UserID       uint                    `json:"user_id"` // <- this is populated by the middleware
 	}{}
 
@@ -79,7 +81,15 @@ func (h *RecipeHandler) createRecipe(c *fiber.Ctx) error {
 
 	recipe.UserID = user.ID
 
-	r, err := h.recipeService.CreateRecipe(recipe.UserID, recipe.Name, recipe.Description, recipe.Ingredients, recipe.Instructions)
+	r, err := h.recipeService.CreateRecipe(
+		recipe.UserID,
+		recipe.Name,
+		recipe.Description,
+		recipe.CookTime,
+		recipe.Servings,
+		recipe.Ingredients,
+		recipe.Instructions,
+	)
 	if err != nil {
 		log.Println("error creating recipe", err)
 		return SendError(c, InternalServerError())

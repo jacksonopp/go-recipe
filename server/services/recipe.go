@@ -12,7 +12,7 @@ import (
 
 type RecipeService interface {
 	// RECIPES
-	CreateRecipe(userID uint, name, description string, ingredients []domain.IngredientDto, instructions []domain.InstructionDto) (*domain.Recipe, error)
+	CreateRecipe(userID uint, name, description, cookTime string, servings int, ingredients []domain.IngredientDto, instructions []domain.InstructionDto) (*domain.Recipe, error)
 	GetRecipeById(id uint) (*domain.Recipe, error)
 	UpdateRecipe(userId, recipeID uint, name, description string) (*domain.Recipe, error)
 	DeleteRecipe(userId, recipeID uint) error
@@ -51,7 +51,7 @@ type recipeVal struct {
 // RECIPES
 
 // CreateRecipe creates a new recipe with the given name and description.
-func (r *recipeService) CreateRecipe(userID uint, name, description string, ingredients []domain.IngredientDto, instructions []domain.InstructionDto) (*domain.Recipe, error) {
+func (r *recipeService) CreateRecipe(userID uint, name, description, cookTime string, servings int, ingredients []domain.IngredientDto, instructions []domain.InstructionDto) (*domain.Recipe, error) {
 	ctx, cancel := context.WithTimeout(r.ctx, 5*time.Second)
 	defer cancel()
 	ch := make(chan recipeVal)
@@ -65,6 +65,8 @@ func (r *recipeService) CreateRecipe(userID uint, name, description string, ingr
 		recipe := &domain.Recipe{
 			Name:        name,
 			Description: description,
+			Servings:    servings,
+			CookTime:    cookTime,
 			UserID:      userID,
 		}
 
